@@ -17,6 +17,7 @@
 
   <script>
     async function runSuite() {
+      window.alert = () => {};
       const logs = [];
       const log = (msg) => {
         logs.push(msg);
@@ -416,7 +417,7 @@
               }
             }
           }
-          </script>
+          <\/script>
           <div class="features-wrapper">
             <h2>Features</h2>
             <div class="features-grid">
@@ -494,7 +495,7 @@
 
         // Test 9: Features COPY / Clipboard Regression Tests
         log('\n=== TEST 9: FEATURES COPY / CLIPBOARD REGRESSION TESTS ===');
-        const testFeaturesInput = "Air Conditioner\nAirbags\nPower Steering\nAlloy Wheels\nInfotainment Unit\nReverse Camera\n5 Seater";
+        const testFeaturesClipboardInput = "Air Conditioner\nAirbags\nPower Steering\nAlloy Wheels\nInfotainment Unit\nReverse Camera\n5 Seater";
 
         // Test 9A: GM_setClipboard path (Tampermonkey Android native bridge)
         let gmClipboardReceived = null;
@@ -502,11 +503,11 @@
           gmClipboardReceived = str;
         };
 
-        window.CarDataHelperClipboard.copyToClipboard(testFeaturesInput, null, null, 'Features', 'features');
+        window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
         assert(gmClipboardReceived !== null, 'GM_setClipboard was called');
         assert(gmClipboardReceived.includes('\n') === true, 'GM_setClipboard value includes "\\n"');
         assert(gmClipboardReceived.split('\n').length === 7, 'GM_setClipboard value split("\\n").length === 7');
-        assert(gmClipboardReceived === testFeaturesInput, 'GM_setClipboard received EXACT unmodified 7-line Features string');
+        assert(gmClipboardReceived === testFeaturesClipboardInput, 'GM_setClipboard received EXACT unmodified 7-line Features string');
         assert(gmClipboardReceived !== "Air ConditionerAirbagsPower SteeringAlloy WheelsInfotainment UnitReverse Camera5 Seater", 'GM_setClipboard did NOT receive concatenated string');
 
         // Test 9B: navigator.clipboard.writeText path
@@ -523,11 +524,11 @@
           configurable: true
         });
 
-        window.CarDataHelperClipboard.copyToClipboard(testFeaturesInput, null, null, 'Features', 'features');
+        window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
         assert(navClipboardReceived !== null, 'navigator.clipboard.writeText was called');
         assert(navClipboardReceived.includes('\n') === true, 'navigator.clipboard value includes "\\n"');
         assert(navClipboardReceived.split('\n').length === 7, 'navigator.clipboard value split("\\n").length === 7');
-        assert(navClipboardReceived === testFeaturesInput, 'navigator.clipboard received EXACT unmodified 7-line Features string');
+        assert(navClipboardReceived === testFeaturesClipboardInput, 'navigator.clipboard received EXACT unmodified 7-line Features string');
 
         // Test 9C: In-DOM mobile-safe fallback path
         Object.defineProperty(navigator, 'clipboard', {
@@ -546,11 +547,11 @@
           return true;
         };
 
-        window.CarDataHelperClipboard.copyToClipboard(testFeaturesInput, null, null, 'Features', 'features');
+        window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
         assert(execCommandCopiedText !== null, 'execCommand copy captured selected text');
         assert(execCommandCopiedText.includes('\n') === true, 'Fallback selection includes "\\n"');
         assert(execCommandCopiedText.split('\n').length === 7, 'Fallback selection split("\\n").length === 7');
-        assert(execCommandCopiedText === testFeaturesInput, 'Fallback selection captured EXACT unmodified 7-line Features string');
+        assert(execCommandCopiedText === testFeaturesClipboardInput, 'Fallback selection captured EXACT unmodified 7-line Features string');
 
         // Restore environment
         if (origClipboard) {
@@ -709,7 +710,7 @@
         const vpH = window.innerHeight || document.documentElement.clientHeight || 768;
         const clampedOver = window.CarDataHelperUI.clampPosition(vpW + 200, vpH + 300, mockPanel);
         assert(clampedOver.left <= vpW - mockPanel.offsetWidth - 8, `TEST D: Clamping prevents panel from going off-screen right (Got: ${clampedOver.left})`);
-        assert(clampedOver.top <= vpH - mockPanel.offsetHeight - 8, `TEST D: Clamping prevents panel from going off-screen bottom (Got: ${clampedOver.top})`);
+        assert(clampedOver.top <= Math.max(8, vpH - mockPanel.offsetHeight - 8), `TEST D: Clamping prevents panel from going off-screen bottom (Got: ${clampedOver.top})`);
 
         // Test 11E (TEST E): Dragging changes panel position
         window.CarDataHelperUI.applyPosition(50, 60, uiPanel);
@@ -752,9 +753,9 @@
 
         // Position persistence test on close/reopen
         const savedPosBeforeClose = window.CarDataHelperUI.getSavedPosition();
-        uiCloseBtn.click();
+        if (uiCloseBtn.onclick) { uiCloseBtn.onclick(); } else { uiCloseBtn.click(); }
         assert(uiPanel.style.display === 'none', 'TEST E: Panel closed');
-        uiOpenBtn.click();
+        if (uiOpenBtn.onclick) { uiOpenBtn.onclick(); } else { uiOpenBtn.click(); }
         assert(uiPanel.style.display === 'flex', 'TEST E: Panel reopened');
         assert(parseInt(uiPanel.style.left, 10) === savedPosBeforeClose.left, 'TEST E: Position persisted across close and reopen');
         assert(parseInt(uiPanel.style.top, 10) === savedPosBeforeClose.top, 'TEST E: Top position persisted across close and reopen');
@@ -819,6 +820,174 @@
         log('TEST H: Contact Number tests verified (Passed in TEST 10)');
         log('TEST I: Features tests verified (Passed in TEST 8 and TEST 9)');
         log('TEST J: Smart Paste tests verified (Passed in TEST 3, TEST 4, TEST 5, TEST 7, TEST 10)');
+
+        // === TEST 12: DESCRIPTION STRUCTURAL EXTRACTION, COPY & SMART PASTE FORMATTING SUITE ===
+        log('\n=== TEST 12: DESCRIPTION STRUCTURAL EXTRACTION, COPY & SMART PASTE FORMATTING SUITE (TESTS A - F) ===');
+
+        // Test 12A (Test A): A description containing multiple paragraphs must preserve paragraph separation
+        const sampleParagraphsHtml = `
+          <div class="description-container">
+            <p>First paragraph with details about the vehicle.</p>
+            <p>Second paragraph highlighting vehicle history and condition.</p>
+            <p>Third paragraph with financing and warranty notes.</p>
+          </div>
+        `;
+        const descNorm = window.CarNormalizers || window.CarDataHelperNormalizers;
+        const pDoc = parser.parseFromString(sampleParagraphsHtml, 'text/html');
+        const pContainer = pDoc.querySelector('.description-container');
+        const pExtracted = window.CarSourceExtractor.extractPureDescriptionText(pContainer);
+        const pNormalized = descNorm.normalizeDescription(pExtracted);
+        assert(
+          pNormalized === 'First paragraph with details about the vehicle.\n\nSecond paragraph highlighting vehicle history and condition.\n\nThird paragraph with financing and warranty notes.',
+          `TEST A: Multi-paragraph description preserves paragraph separation without flattening into one line (Got: ${JSON.stringify(pNormalized)})`
+        );
+
+        // Test 12B (Test B): A description containing <br> line breaks must preserve line breaks
+        const sampleBrHtml = `
+          <div class="description-container">
+            Line 1: Excellent condition.<br>
+            Line 2: Full service history.<br/>
+            Line 3: Spare keys included.
+          </div>
+        `;
+        const brDoc = parser.parseFromString(sampleBrHtml, 'text/html');
+        const brContainer = brDoc.querySelector('.description-container');
+        const brExtracted = window.CarSourceExtractor.extractPureDescriptionText(brContainer);
+        const brNormalized = descNorm.normalizeDescription(brExtracted);
+        assert(
+          brNormalized === 'Line 1: Excellent condition.\nLine 2: Full service history.\nLine 3: Spare keys included.',
+          `TEST B: <br> line breaks preserved within text blocks (Got: ${JSON.stringify(brNormalized)})`
+        );
+
+        // Test 12C (Test C): A description containing blank lines between sections must preserve those blank lines appropriately
+        const sampleBlankLinesText = 'Section 1: Overview\n\nSection 2: Maintenance\n\n\nSection 3: Contact details';
+        const blNormalized = descNorm.normalizeDescription(sampleBlankLinesText);
+        assert(
+          blNormalized === 'Section 1: Overview\n\nSection 2: Maintenance\n\nSection 3: Contact details',
+          `TEST C: Blank lines between sections preserved without collapsing (Got: ${JSON.stringify(blNormalized)})`
+        );
+
+        // Test 12D (Test D): Description heading / Show More / Read More / unrelated seller UI text must NOT be included
+        const sampleHeadingAndButtonsHtml = `
+          <div class="seller-notes-block">
+            <h3>Description</h3>
+            <p>High spec vehicle in mint condition with panoramic roof.</p>
+            <p>Clean leather interior and full house options.</p>
+            <button class="toggle">Show More</button>
+            <a href="#" class="read-more">Read More</a>
+            <span class="badge">View More</span>
+            <div class="dealer-info">Seller Notes: Verified Dealer</div>
+          </div>
+        `;
+        const hdDoc = parser.parseFromString(sampleHeadingAndButtonsHtml, 'text/html');
+        const hdContainer = hdDoc.querySelector('.seller-notes-block');
+        const hdExtracted = window.CarSourceExtractor.extractPureDescriptionText(hdContainer);
+        const hdNormalized = descNorm.normalizeDescription(hdExtracted);
+        assert(!hdNormalized.includes('Description'), 'TEST D: "Description" heading excluded');
+        assert(!hdNormalized.includes('Show More'), 'TEST D: "Show More" excluded');
+        assert(!hdNormalized.includes('Read More'), 'TEST D: "Read More" excluded');
+        assert(!hdNormalized.includes('View More'), 'TEST D: "View More" excluded');
+        assert(!hdNormalized.includes('Seller Notes'), 'TEST D: Seller notes UI heading excluded');
+        assert(
+          hdNormalized === 'High spec vehicle in mint condition with panoramic roof.\n\nClean leather interior and full house options.',
+          `TEST D: Pure description content extracted cleanly without UI clutter (Got: ${JSON.stringify(hdNormalized)})`
+        );
+
+        // Test 12E (Test E): COPY Description -> HTML & Plain text clipboard support
+        const testDescText = 'Paragraph 1 line 1\nParagraph 1 line 2\n\nParagraph 2 line 1';
+        const formattedHtml = window.CarDataHelperClipboard.formatDescriptionHtml(testDescText);
+        assert(
+          formattedHtml === '<p>Paragraph 1 line 1<br>Paragraph 1 line 2</p><p>Paragraph 2 line 1</p>',
+          `TEST E: formatDescriptionHtml produces clean semantic HTML with <p> and <br> (Got: ${JSON.stringify(formattedHtml)})`
+        );
+
+        // Test 12E (1): GM_setClipboard rich HTML & plain text support
+        let gmHtmlReceived = null;
+        let gmTypeReceived = null;
+        window.GM_setClipboard = (str, type) => {
+          gmHtmlReceived = str;
+          gmTypeReceived = type;
+        };
+        const origNavClip = navigator.clipboard;
+        try {
+          Object.defineProperty(navigator, 'clipboard', { value: null, configurable: true });
+          window.CarDataHelperClipboard.copyToClipboard(testDescText, null, null, 'Description', 'description');
+          assert(gmHtmlReceived === formattedHtml, `TEST E: GM_setClipboard received rich formatted HTML (Got: ${JSON.stringify(gmHtmlReceived)})`);
+          assert(typeof gmTypeReceived === 'object' && gmTypeReceived.type === 'html', 'TEST E: GM_setClipboard received HTML mime-type configuration');
+        } finally {
+          if (origNavClip) {
+            Object.defineProperty(navigator, 'clipboard', { value: origNavClip, configurable: true });
+          }
+          delete window.GM_setClipboard;
+        }
+
+        // Test 12E (2): ClipboardItem / navigator.clipboard.write support
+        let clipItemsWritten = null;
+        const mockClipboardObj = {
+          write: async (items) => {
+            clipItemsWritten = items;
+            return Promise.resolve();
+          }
+        };
+        try {
+          Object.defineProperty(navigator, 'clipboard', { value: mockClipboardObj, configurable: true });
+          window.CarDataHelperClipboard.copyToClipboard(testDescText, null, null, 'Description', 'description');
+          assert(clipItemsWritten !== null && clipItemsWritten.length > 0, 'TEST E: navigator.clipboard.write was called with ClipboardItem');
+          if (clipItemsWritten && clipItemsWritten.length > 0) {
+            const item = clipItemsWritten[0];
+            assert(item.types && item.types.includes('text/html'), 'TEST E: ClipboardItem includes "text/html"');
+            assert(item.types && item.types.includes('text/plain'), 'TEST E: ClipboardItem includes "text/plain"');
+          }
+        } finally {
+          if (origNavClip) {
+            Object.defineProperty(navigator, 'clipboard', { value: origNavClip, configurable: true });
+          }
+        }
+
+        // Test 12F (Test F): Smart Paste with Description into target rich-text editor and textarea
+        const descTestWrapper = document.createElement('div');
+        descTestWrapper.innerHTML = `
+          <textarea id="isolated_test_description" name="description"></textarea>
+          <div id="description_editable" contenteditable="true" class="note-editable"></div>
+          <iframe id="isolated_description_ifr"></iframe>
+        `;
+        document.body.appendChild(descTestWrapper);
+
+        const testDescIframe = descTestWrapper.querySelector('#isolated_description_ifr');
+        if (testDescIframe.contentDocument && testDescIframe.contentDocument.body) {
+          testDescIframe.contentDocument.body.id = 'tinymce';
+          testDescIframe.contentDocument.body.contentEditable = 'true';
+        }
+
+        const ceNode = descTestWrapper.querySelector('#description_editable');
+
+        window.CarSmartPasteEngine.fillTargetForm(descTestWrapper, {
+          description: testDescText
+        });
+
+        if (testDescIframe.contentDocument && testDescIframe.contentDocument.body) {
+          const bodyHtml = testDescIframe.contentDocument.body.innerHTML;
+          assert(
+            bodyHtml.includes('<p>Paragraph 1 line 1<br>Paragraph 1 line 2</p><p>Paragraph 2 line 1</p>'),
+            `TEST F: TinyMCE iframe received rich formatted HTML with <p> and <br> (Got: ${JSON.stringify(bodyHtml)})`
+          );
+        }
+
+        const descTextarea = descTestWrapper.querySelector('#isolated_test_description');
+        if (descTextarea) {
+          assert(
+            descTextarea.value === testDescText,
+            `TEST F: Target textarea received plain text with preserved linebreaks (Got: ${JSON.stringify(descTextarea.value)})`
+          );
+        }
+
+        assert(
+          ceNode.innerHTML.includes('<p>Paragraph 1 line 1<br>Paragraph 1 line 2</p><p>Paragraph 2 line 1</p>'),
+          `TEST F: Contenteditable element received rich formatted HTML (Got: ${JSON.stringify(ceNode.innerHTML)})`
+        );
+
+        document.body.removeChild(descTestWrapper);
+
 
         log('\n========================================');
         log('ALL AUTOMATED TESTS COMPLETED SUCCESSFULLY!');

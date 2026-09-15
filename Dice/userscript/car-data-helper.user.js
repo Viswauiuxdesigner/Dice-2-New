@@ -91,22 +91,37 @@
     normalizeDescription(val) {
       if (!val || typeof val !== 'string') return '';
       let text = val
-        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/[ \t]*<br\s*\/?>[ \t]*\r?\n?/gi, '\n')
         .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n');
+        .replace(/\r/g, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<p[^>]*>/gi, '')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<div[^>]*>/gi, '')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<li[^>]*>/gi, '• ');
 
       const rawParagraphs = text.split(/\n{2,}/);
       const cleanParagraphs = [];
 
       for (const rawP of rawParagraphs) {
-        const cleanP = rawP
-          .split('\n')
-          .map(line => line.replace(/[ \t]+/g, ' ').trim())
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-        if (cleanP && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(cleanP) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(cleanP)) {
-          cleanParagraphs.push(cleanP);
+        const lines = rawP.split('\n');
+        const cleanLines = [];
+
+        for (const line of lines) {
+          const cleanLine = line.replace(/[ \t]+/g, ' ').trim();
+          if (!cleanLine) continue;
+
+          // Exclude headings and show more/less controls
+          if (/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(cleanLine)) continue;
+          if (/^(?:show|read|view)\s*(?:more|less)$/i.test(cleanLine)) continue;
+          if (/^(?:expand|\.\.\.\s*more)$/i.test(cleanLine)) continue;
+
+          cleanLines.push(cleanLine);
+        }
+
+        if (cleanLines.length > 0) {
+          cleanParagraphs.push(cleanLines.join('\n'));
         }
       }
 
@@ -945,8 +960,8 @@
           const junk = clone.querySelectorAll('style, script, noscript, svg, button, iframe, nav, header, footer, [aria-hidden="true"], [style*="display: none"], [style*="display:none"], [hidden]');
           junk.forEach(el => el.remove());
 
-          // 2. Remove any Show More / Read More anchors or spans
-          const moreControls = clone.querySelectorAll('a, span, div, p');
+          // 2. Remove any Show More / Read More anchors or spans or buttons
+          const moreControls = clone.querySelectorAll('a, span, div, p, button');
           moreControls.forEach(el => {
             const txt = (el.textContent || '').trim();
             if (/^(?:show\s*more|read\s*more|view\s*more|show\s*less|read\s*less|expand|\.\.\.\s*more)$/i.test(txt)) {
@@ -954,14 +969,28 @@
             }
           });
 
-          // 3. Replace <br> tags with \n
-          clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+          // 3. Replace <br> tags with \n, collapsing adjacent whitespace/newlines
+          clone.querySelectorAll('br').forEach(br => {
+            if (br.nextSibling && br.nextSibling.nodeType === 3) {
+              br.nextSibling.nodeValue = br.nextSibling.nodeValue.replace(/^[ \t]*\r?\n[ \t]*/, '');
+            }
+            if (br.previousSibling && br.previousSibling.nodeType === 3) {
+              br.previousSibling.nodeValue = br.previousSibling.nodeValue.replace(/[ \t]*$/, '');
+            }
+            br.replaceWith('\n');
+          });
 
           // 4. Strategy A: Extract from explicit <p> paragraph elements
           const pElements = Array.from(clone.querySelectorAll('p'));
           if (pElements.length > 0) {
             const validParagraphs = pElements
-              .map(p => (p.textContent || '').replace(/\r\n/g, '\n').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+              .map(p => {
+                const rawLines = (p.textContent || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+                const cleanLines = rawLines
+                  .map(l => l.replace(/[ \t]+/g, ' ').trim())
+                  .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+                return cleanLines.join('\n');
+              })
               .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
             if (validParagraphs.length > 0) {
@@ -976,7 +1005,13 @@
           const childBlocks = Array.from(clone.children).filter(el => /^(DIV|SECTION|ARTICLE|LI)$/i.test(el.tagName));
           if (childBlocks.length > 1) {
             const validBlocks = childBlocks
-              .map(el => (el.textContent || '').replace(/\r\n/g, '\n').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+              .map(el => {
+                const rawLines = (el.textContent || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+                const cleanLines = rawLines
+                  .map(l => l.replace(/[ \t]+/g, ' ').trim())
+                  .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+                return cleanLines.join('\n');
+              })
               .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
             if (validBlocks.length > 0) {
@@ -996,7 +1031,13 @@
 
         const rawBlocks = rawText.split(/\n{2,}/);
         const cleanBlocks = rawBlocks
-          .map(block => block.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+          .map(block => {
+            const rawLines = block.split('\n');
+            const cleanLines = rawLines
+              .map(l => l.replace(/[ \t]+/g, ' ').trim())
+              .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+            return cleanLines.join('\n');
+          })
           .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
         const combined = cleanBlocks.join('\n\n');
@@ -1286,7 +1327,7 @@
       for (const link of telLinks) {
         const href = (link.getAttribute('href') || '').replace(/^tel:\s*/i, '').trim();
         const txt = (link.textContent || '').replace(/\s+/g, ' ').trim();
-        const cand = href || txt;
+        const cand = (txt && /\d/.test(txt) && !txt.includes('*') && !txt.toLowerCase().includes('show')) ? txt : (href || txt);
         if (cand && !cand.includes('*') && !cand.toLowerCase().includes('show') && !cand.toLowerCase().includes('missing')) {
           const digits = cand.replace(/[^\d]/g, '');
           if (digits.length >= 7 && digits.length <= 15) {
@@ -1401,6 +1442,18 @@
     return { normalized, validation };
   }
 
+  function formatDescriptionHtml(text) {
+    if (!text || typeof text !== 'string') return '';
+    const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (/^\s*<p\b/i.test(text)) return text;
+    const normalized = Normalizers.normalizeDescription(text);
+    const paragraphs = normalized.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    return paragraphs.map(p => {
+      const lines = p.split('\n').map(l => escapeHtml(l.trim())).filter(Boolean);
+      return `<p>${lines.join('<br>')}</p>`;
+    }).join('');
+  }
+
   function copyToClipboard(text, btnElement, event, fieldLabel, fieldKey) {
     if (event) {
       try {
@@ -1454,21 +1507,100 @@
       document.body.removeChild(textarea);
     };
 
-    let copied = false;
-    if (typeof GM_setClipboard === 'function') {
-      try {
-        GM_setClipboard(cleanStr, 'text');
-        copied = true;
-      } catch (gmErr) {
-        console.warn('GM_setClipboard failed:', gmErr);
-      }
-    }
+    const isDescription = (fieldKey === 'description' || (fieldLabel && fieldLabel.toLowerCase() === 'description'));
 
-    if (!copied) {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(cleanStr).catch(() => copyFallback(cleanStr));
-      } else {
-        copyFallback(cleanStr);
+    if (isDescription) {
+      const plainStr = cleanStr;
+      const htmlStr = formatDescriptionHtml(cleanStr);
+
+      const copyRichFallback = (htmlContent, plainContent) => {
+        const container = document.createElement('div');
+        container.innerHTML = htmlContent;
+        container.style.position = 'fixed';
+        container.style.left = '-9999px';
+        container.style.top = '0';
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+        document.body.appendChild(container);
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(container);
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        const onCopy = (e) => {
+          e.preventDefault();
+          if (e.clipboardData) {
+            e.clipboardData.setData('text/plain', plainContent);
+            e.clipboardData.setData('text/html', htmlContent);
+          }
+        };
+        document.addEventListener('copy', onCopy);
+        try {
+          document.execCommand('copy');
+        } catch (e) {
+          copyFallback(plainContent);
+        }
+        document.removeEventListener('copy', onCopy);
+        selection.removeAllRanges();
+        document.body.removeChild(container);
+      };
+
+      let copied = false;
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.write === 'function' && typeof ClipboardItem !== 'undefined') {
+        try {
+          const textBlob = new Blob([plainStr], { type: 'text/plain' });
+          const htmlBlob = new Blob([htmlStr], { type: 'text/html' });
+          const item = new ClipboardItem({
+            'text/plain': textBlob,
+            'text/html': htmlBlob
+          });
+          navigator.clipboard.write([item]).catch(() => {
+            if (typeof GM_setClipboard === 'function') {
+              try { GM_setClipboard(htmlStr, { type: 'html', mimetype: 'text/html' }); } catch (_) { GM_setClipboard(plainStr, 'text'); }
+            } else {
+              copyRichFallback(htmlStr, plainStr);
+            }
+          });
+          copied = true;
+        } catch (_) {
+          copied = false;
+        }
+      }
+
+      if (!copied && typeof GM_setClipboard === 'function') {
+        try {
+          GM_setClipboard(htmlStr, { type: 'html', mimetype: 'text/html' });
+          copied = true;
+        } catch (_) {
+          try {
+            GM_setClipboard(plainStr, 'text');
+            copied = true;
+          } catch (_) {}
+        }
+      }
+
+      if (!copied) {
+        copyRichFallback(htmlStr, plainStr);
+      }
+    } else {
+      let copied = false;
+      if (typeof GM_setClipboard === 'function') {
+        try {
+          GM_setClipboard(cleanStr, 'text');
+          copied = true;
+        } catch (gmErr) {
+          console.warn('GM_setClipboard failed:', gmErr);
+        }
+      }
+
+      if (!copied) {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(cleanStr).catch(() => copyFallback(cleanStr));
+        } else {
+          copyFallback(cleanStr);
+        }
       }
     }
 
@@ -2702,9 +2834,14 @@
     },
 
     fillDescription(doc, text) {
+      if (!text) return;
+      const cleanDesc = Normalizers.normalizeDescription(text);
       const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
-      const htmlContent = paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+      const paragraphs = cleanDesc.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+      const htmlContent = paragraphs.map(p => {
+        const lines = p.split('\n').map(l => escapeHtml(l.trim())).filter(Boolean);
+        return `<p>${lines.join('<br>')}</p>`;
+      }).join('');
 
       // 1. Check TinyMCE instances
       try {
@@ -2738,10 +2875,20 @@
         }
       } catch (e) {}
 
-      // 4. Target Textarea / Input (Specifically exclude custom fields like fields[46], fields[47], etc.)
+      // 4. Contenteditable element
+      try {
+        const contentEditable = doc.querySelector('#target_description[contenteditable="true"], #description[contenteditable="true"], [name="description"][contenteditable="true"], .description-editor[contenteditable="true"], div.note-editable');
+        if (contentEditable) {
+          contentEditable.innerHTML = htmlContent;
+          contentEditable.dispatchEvent(new Event('input', { bubbles: true }));
+          contentEditable.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch (e) {}
+
+      // 5. Target Textarea / Input (Specifically exclude custom fields like fields[46], fields[47], etc.)
       const textarea = doc.querySelector('#target_description, #description, textarea[name="description"]');
       if (textarea && !textarea.name?.startsWith('fields[') && !textarea.id?.startsWith('fields_')) {
-        textarea.value = text;
+        textarea.value = cleanDesc;
         try {
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
           textarea.dispatchEvent(new Event('change', { bubbles: true }));
@@ -2757,7 +2904,7 @@
     window.CarsCoZaAdapter = CarsCoZaAdapter;
     window.CarDataHelperNormalizers = Normalizers;
     window.CarDataHelperValidators = Validators;
-    window.CarDataHelperClipboard = { copyToClipboard };
+    window.CarDataHelperClipboard = { copyToClipboard, formatDescriptionHtml };
     window.CarDataHelperAutoReveal = autoRevealShowNumber;
     window.CarDataHelperUI = {
       createHelperPanel,

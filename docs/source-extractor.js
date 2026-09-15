@@ -714,6 +714,8 @@ const CarsCoZaAdapter = {
       } else if (typeof nextDataProps.features === 'string' && nextDataProps.features.includes('\n')) {
         featuresList = nextDataProps.features.split(/\r?\n/).map(f => f.trim()).filter(Boolean);
       }
+    }
+
     const featuresDebug = {
       headingFound: featureHeading ? {
         tag: featureHeading.tagName,
@@ -753,8 +755,8 @@ const CarsCoZaAdapter = {
         const junk = clone.querySelectorAll('style, script, noscript, svg, button, iframe, nav, header, footer, [aria-hidden="true"], [style*="display: none"], [style*="display:none"], [hidden]');
         junk.forEach(el => el.remove());
 
-        // 2. Remove any Show More / Read More anchors or spans
-        const moreControls = clone.querySelectorAll('a, span, div, p');
+        // 2. Remove any Show More / Read More anchors or spans or buttons
+        const moreControls = clone.querySelectorAll('a, span, div, p, button');
         moreControls.forEach(el => {
           const txt = (el.textContent || '').trim();
           if (/^(?:show\s*more|read\s*more|view\s*more|show\s*less|read\s*less|expand|\.\.\.\s*more)$/i.test(txt)) {
@@ -762,14 +764,28 @@ const CarsCoZaAdapter = {
           }
         });
 
-        // 3. Replace <br> tags with \n
-        clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        // 3. Replace <br> tags with \n, collapsing adjacent whitespace/newlines
+        clone.querySelectorAll('br').forEach(br => {
+          if (br.nextSibling && br.nextSibling.nodeType === 3) {
+            br.nextSibling.nodeValue = br.nextSibling.nodeValue.replace(/^[ \t]*\r?\n[ \t]*/, '');
+          }
+          if (br.previousSibling && br.previousSibling.nodeType === 3) {
+            br.previousSibling.nodeValue = br.previousSibling.nodeValue.replace(/[ \t]*$/, '');
+          }
+          br.replaceWith('\n');
+        });
 
         // 4. Strategy A: Extract from explicit <p> paragraph elements
         const pElements = Array.from(clone.querySelectorAll('p'));
         if (pElements.length > 0) {
           const validParagraphs = pElements
-            .map(p => (p.textContent || '').replace(/\r\n/g, '\n').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+            .map(p => {
+              const rawLines = (p.textContent || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+              const cleanLines = rawLines
+                .map(l => l.replace(/[ \t]+/g, ' ').trim())
+                .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+              return cleanLines.join('\n');
+            })
             .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
           if (validParagraphs.length > 0) {
@@ -784,7 +800,13 @@ const CarsCoZaAdapter = {
         const childBlocks = Array.from(clone.children).filter(el => /^(DIV|SECTION|ARTICLE|LI)$/i.test(el.tagName));
         if (childBlocks.length > 1) {
           const validBlocks = childBlocks
-            .map(el => (el.textContent || '').replace(/\r\n/g, '\n').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+            .map(el => {
+              const rawLines = (el.textContent || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+              const cleanLines = rawLines
+                .map(l => l.replace(/[ \t]+/g, ' ').trim())
+                .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+              return cleanLines.join('\n');
+            })
             .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
           if (validBlocks.length > 0) {
@@ -804,12 +826,19 @@ const CarsCoZaAdapter = {
 
       const rawBlocks = rawText.split(/\n{2,}/);
       const cleanBlocks = rawBlocks
-        .map(block => block.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join(' ').trim())
+        .map(block => {
+          const rawLines = block.split('\n');
+          const cleanLines = rawLines
+            .map(l => l.replace(/[ \t]+/g, ' ').trim())
+            .filter(l => l.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(l) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(l) && !hasCssArtifacts(l));
+          return cleanLines.join('\n');
+        })
         .filter(p => p.length > 0 && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(p) && !hasCssArtifacts(p));
 
       const combined = cleanBlocks.join('\n\n');
       return hasCssArtifacts(combined) ? '' : combined;
     };
+    CarsCoZaAdapter.extractPureDescriptionText = extractPureDescriptionText;
 
     // Step A: Locate Description Heading Element
     const descHeadingCandidates = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="heading"], [class*="title"], strong, b, button, summary, p, div, span'));
@@ -1103,7 +1132,7 @@ const CarsCoZaAdapter = {
     for (const link of telLinks) {
       const href = (link.getAttribute('href') || '').replace(/^tel:\s*/i, '').trim();
       const txt = (link.textContent || '').replace(/\s+/g, ' ').trim();
-      const cand = href || txt;
+      const cand = (txt && /\d/.test(txt) && !txt.includes('*') && !txt.toLowerCase().includes('show')) ? txt : (href || txt);
       if (cand && !cand.includes('*') && !cand.toLowerCase().includes('show') && !cand.toLowerCase().includes('missing')) {
         const digits = cand.replace(/[^\d]/g, '');
         if (digits.length >= 7 && digits.length <= 15) {
@@ -1167,6 +1196,10 @@ const CarsCoZaAdapter = {
 
 window.CarSourceExtractor = {
   adapters: [CarsCoZaAdapter],
+
+  extractPureDescriptionText(container) {
+    return CarsCoZaAdapter.extractPureDescriptionText ? CarsCoZaAdapter.extractPureDescriptionText(container) : '';
+  },
 
   extractFromDocument(doc) {
     if (!doc) doc = document;

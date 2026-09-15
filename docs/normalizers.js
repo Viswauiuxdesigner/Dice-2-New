@@ -106,24 +106,37 @@ window.CarNormalizers = {
   normalizeDescription(val) {
     if (!val || typeof val !== 'string') return '';
     let text = val
-      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/[ \t]*<br\s*\/?>[ \t]*\r?\n?/gi, '\n')
       .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n');
+      .replace(/\r/g, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<p[^>]*>/gi, '')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<div[^>]*>/gi, '')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '• ');
 
     // Split on double newlines or blocks
     const rawParagraphs = text.split(/\n{2,}/);
     const cleanParagraphs = [];
 
     for (const rawP of rawParagraphs) {
-      // Within each paragraph, collapse internal single newlines or multiple spaces into a single space
-      const cleanP = rawP
-        .split('\n')
-        .map(line => line.replace(/[ \t]+/g, ' ').trim())
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      if (cleanP && !/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(cleanP) && !/^(?:show|read|view)\s*(?:more|less)$/i.test(cleanP)) {
-        cleanParagraphs.push(cleanP);
+      const lines = rawP.split('\n');
+      const cleanLines = [];
+
+      for (const line of lines) {
+        const cleanLine = line.replace(/[ \t]+/g, ' ').trim();
+        if (!cleanLine) continue;
+
+        if (/^(?:seller\s+|dealer\s+|vehicle\s+)?description:?$/i.test(cleanLine)) continue;
+        if (/^(?:show|read|view)\s*(?:more|less)$/i.test(cleanLine)) continue;
+        if (/^(?:expand|\.\.\.\s*more)$/i.test(cleanLine)) continue;
+
+        cleanLines.push(cleanLine);
+      }
+
+      if (cleanLines.length > 0) {
+        cleanParagraphs.push(cleanLines.join('\n'));
       }
     }
 
