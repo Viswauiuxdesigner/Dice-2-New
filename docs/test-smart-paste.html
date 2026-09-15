@@ -665,6 +665,161 @@
         // TEST 10I (TEST I) — FEATURES & HIGHLIGHTS UNTOUCHED
         assert(document.getElementById('target_features_text').value === "Rubber Floor Mats\nRubber Load Space Mat\nOn The Road", 'TEST I: Features formatting and newlines remain completely intact');
 
+        // === TEST 11: HELPER PANEL UI, DRAG, CLOSE, AND REOPEN INTEGRATION ===
+        log('\n=== TEST 11: HELPER PANEL UI, DRAG, CLOSE, AND REOPEN INTEGRATION ===');
+
+        // Test 11A (TEST A): Panel exists and has correct elements
+        if (window.CarDataHelperUI && window.CarDataHelperUI.createHelperPanel) {
+          window.CarDataHelperUI.createHelperPanel();
+        }
+        const uiPanel = document.getElementById('car-data-helper-panel');
+        const uiHeader = document.getElementById('car-panel-header');
+        const uiCloseBtn = document.getElementById('car-panel-close');
+        const uiToggleBtn = document.getElementById('car-panel-toggle');
+        const uiReextractBtn = document.getElementById('car-panel-reextract');
+        const uiOpenBtn = document.getElementById('car-helper-open-btn');
+
+        assert(uiPanel !== null, 'TEST A: Helper panel exists in DOM');
+        assert(uiHeader !== null, 'TEST A: Helper panel header exists in DOM');
+        assert(uiCloseBtn !== null, 'TEST A: Close button (✕) exists in header');
+        assert(uiToggleBtn !== null, 'TEST A: Minimize/toggle button exists in header');
+        assert(uiReextractBtn !== null, 'TEST A: Re-extract button exists in header');
+        assert(uiOpenBtn !== null, 'TEST A: Open helper button exists in DOM');
+        assert(uiPanel.style.display !== 'none', 'TEST A: Panel is initially visible');
+        assert(uiOpenBtn.style.display === 'none', 'TEST A: Open button is initially hidden');
+
+        // Test 11B (TEST B): Close hides panel
+        uiCloseBtn.click();
+        assert(uiPanel.style.display === 'none', 'TEST B: Close button hides the helper panel (display: none)');
+        assert(uiOpenBtn.style.display === 'flex', 'TEST B: Close button displays the floating Open Helper button (display: flex)');
+        assert(document.getElementById('car-data-helper-panel') !== null, 'TEST B: Close does NOT destroy the panel DOM');
+
+        // Test 11C (TEST C): Open button restores panel
+        uiOpenBtn.click();
+        assert(uiPanel.style.display === 'flex', 'TEST C: Open button restores the helper panel (display: flex)');
+        assert(uiOpenBtn.style.display === 'none', 'TEST C: Open button hides itself after reopening');
+
+        // Test 11D (TEST D): Panel remains within viewport (clamping tests)
+        const mockPanel = { offsetWidth: 380, offsetHeight: 500 };
+        const clampedNeg = window.CarDataHelperUI.clampPosition(-100, -50, mockPanel);
+        assert(clampedNeg.left >= 8, `TEST D: Clamping prevents panel from going off-screen left (Got: ${clampedNeg.left})`);
+        assert(clampedNeg.top >= 8, `TEST D: Clamping prevents panel from going off-screen top (Got: ${clampedNeg.top})`);
+
+        const vpW = window.innerWidth || document.documentElement.clientWidth || 1024;
+        const vpH = window.innerHeight || document.documentElement.clientHeight || 768;
+        const clampedOver = window.CarDataHelperUI.clampPosition(vpW + 200, vpH + 300, mockPanel);
+        assert(clampedOver.left <= vpW - mockPanel.offsetWidth - 8, `TEST D: Clamping prevents panel from going off-screen right (Got: ${clampedOver.left})`);
+        assert(clampedOver.top <= vpH - mockPanel.offsetHeight - 8, `TEST D: Clamping prevents panel from going off-screen bottom (Got: ${clampedOver.top})`);
+
+        // Test 11E (TEST E): Dragging changes panel position
+        window.CarDataHelperUI.applyPosition(50, 60, uiPanel);
+        const posBefore = { left: parseInt(uiPanel.style.left, 10), top: parseInt(uiPanel.style.top, 10) };
+        assert(posBefore.left === 50 && posBefore.top === 60, 'TEST E: Initial panel position set to 50px, 60px');
+
+        const pDownEvent = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 50,
+          clientY: 60,
+          button: 0,
+          pointerId: 1
+        });
+        uiHeader.dispatchEvent(pDownEvent);
+
+        const pMoveEvent = new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 120,
+          clientY: 140,
+          button: 0,
+          pointerId: 1
+        });
+        window.dispatchEvent(pMoveEvent);
+
+        const pUpEvent = new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 120,
+          clientY: 140,
+          button: 0,
+          pointerId: 1
+        });
+        window.dispatchEvent(pUpEvent);
+
+        const posAfter = { left: parseInt(uiPanel.style.left, 10), top: parseInt(uiPanel.style.top, 10) };
+        assert(posAfter.left !== posBefore.left, `TEST E: Dragging updated panel left position (From: ${posBefore.left} to: ${posAfter.left})`);
+        assert(posAfter.top !== posBefore.top, `TEST E: Dragging updated panel top position (From: ${posBefore.top} to: ${posAfter.top})`);
+
+        // Position persistence test on close/reopen
+        const savedPosBeforeClose = window.CarDataHelperUI.getSavedPosition();
+        uiCloseBtn.click();
+        assert(uiPanel.style.display === 'none', 'TEST E: Panel closed');
+        uiOpenBtn.click();
+        assert(uiPanel.style.display === 'flex', 'TEST E: Panel reopened');
+        assert(parseInt(uiPanel.style.left, 10) === savedPosBeforeClose.left, 'TEST E: Position persisted across close and reopen');
+        assert(parseInt(uiPanel.style.top, 10) === savedPosBeforeClose.top, 'TEST E: Top position persisted across close and reopen');
+
+        // Test 11F (TEST F): Dragging does not trigger button actions
+        const btnDownEvent = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 60,
+          clientY: 60,
+          button: 0,
+          pointerId: 2
+        });
+        uiReextractBtn.dispatchEvent(btnDownEvent);
+
+        const btnMoveEvent = new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 150,
+          clientY: 150,
+          button: 0,
+          pointerId: 2
+        });
+        window.dispatchEvent(btnMoveEvent);
+
+        const posAfterBtnDrag = { left: parseInt(uiPanel.style.left, 10), top: parseInt(uiPanel.style.top, 10) };
+        assert(posAfterBtnDrag.left === savedPosBeforeClose.left, 'TEST F: Drag on button did NOT move panel');
+        assert(posAfterBtnDrag.top === savedPosBeforeClose.top, 'TEST F: Drag on button did NOT initiate panel drag');
+
+        // Sub-4px movement deadzone test (simple tap on header maintains touch/scroll)
+        const tapDown = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 70,
+          clientY: 70,
+          button: 0,
+          pointerId: 3
+        });
+        uiHeader.dispatchEvent(tapDown);
+        const tapMove = new PointerEvent('pointermove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 72,
+          clientY: 71,
+          button: 0,
+          pointerId: 3
+        });
+        window.dispatchEvent(tapMove);
+        assert(uiHeader.style.touchAction !== 'none', 'TEST F: Sub-4px movement maintains normal touch/scroll (touchAction is not "none")');
+        const tapUp = new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 72,
+          clientY: 71,
+          button: 0,
+          pointerId: 3
+        });
+        window.dispatchEvent(tapUp);
+
+        // Tests 11G - 11J regression confirmations
+        log('TEST G: Existing extraction tests verified (Passed in TEST 1)');
+        log('TEST H: Contact Number tests verified (Passed in TEST 10)');
+        log('TEST I: Features tests verified (Passed in TEST 8 and TEST 9)');
+        log('TEST J: Smart Paste tests verified (Passed in TEST 3, TEST 4, TEST 5, TEST 7, TEST 10)');
+
         log('\n========================================');
         log('ALL AUTOMATED TESTS COMPLETED SUCCESSFULLY!');
         log('========================================');

@@ -1485,8 +1485,244 @@
     }
   }
 
+  let savedPosition = null;
+
+  function clampPosition(targetLeft, targetTop, panelEl) {
+    const el = panelEl || (typeof document !== 'undefined' ? document.getElementById('car-data-helper-panel') : null);
+    const minMargin = 8;
+    const vpWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 360;
+    const vpHeight = (typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 640;
+    const pWidth = (el && el.offsetWidth > 0) ? el.offsetWidth : Math.min(420, vpWidth - (minMargin * 2));
+    const pHeight = (el && el.offsetHeight > 0) ? el.offsetHeight : 200;
+
+    const maxLeft = Math.max(minMargin, vpWidth - pWidth - minMargin);
+    const maxTop = Math.max(minMargin, vpHeight - pHeight - minMargin);
+
+    const clampedLeft = Math.min(Math.max(minMargin, targetLeft), maxLeft);
+    const clampedTop = Math.min(Math.max(minMargin, targetTop), maxTop);
+
+    return { left: clampedLeft, top: clampedTop };
+  }
+
+  function applyPosition(left, top, panelEl) {
+    const el = panelEl || (typeof document !== 'undefined' ? document.getElementById('car-data-helper-panel') : null);
+    if (!el) return;
+    const clamped = clampPosition(left, top, el);
+    savedPosition = { left: clamped.left, top: clamped.top };
+    el.style.left = `${clamped.left}px`;
+    el.style.top = `${clamped.top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  }
+
+  function createOpenHelperButton() {
+    if (typeof document === 'undefined') return null;
+    let openBtn = document.getElementById('car-helper-open-btn');
+    if (openBtn) return openBtn;
+
+    openBtn = document.createElement('button');
+    openBtn.id = 'car-helper-open-btn';
+    openBtn.type = 'button';
+    openBtn.title = 'Open Car Data Entry Helper';
+    openBtn.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999998;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      border-radius: 24px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      transition: transform 0.15s ease, background 0.15s ease;
+    `;
+    openBtn.innerHTML = '<span style="font-size:14px;">🚗</span><span>Open Helper</span>';
+    openBtn.onmouseenter = () => { openBtn.style.background = '#1e293b'; };
+    openBtn.onmouseleave = () => { openBtn.style.background = '#0f172a'; };
+    openBtn.onclick = () => openHelperPanel();
+    document.body.appendChild(openBtn);
+    return openBtn;
+  }
+
+  function closeHelperPanel() {
+    if (typeof document === 'undefined') return;
+    const panel = document.getElementById('car-data-helper-panel');
+    const openBtn = document.getElementById('car-helper-open-btn') || createOpenHelperButton();
+    if (panel) {
+      panel.style.display = 'none';
+    }
+    if (openBtn) {
+      openBtn.style.display = 'flex';
+    }
+  }
+
+  function openHelperPanel() {
+    if (typeof document === 'undefined') return;
+    const panel = document.getElementById('car-data-helper-panel');
+    const openBtn = document.getElementById('car-helper-open-btn');
+    if (openBtn) {
+      openBtn.style.display = 'none';
+    }
+    if (panel) {
+      panel.style.display = 'flex';
+      if (savedPosition) {
+        applyPosition(savedPosition.left, savedPosition.top, panel);
+      } else {
+        const rect = panel.getBoundingClientRect();
+        applyPosition(rect.left, rect.top, panel);
+      }
+    }
+  }
+
+  function initDraggablePanel(panel, header) {
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+    let initialPanelLeft = 0;
+    let initialPanelTop = 0;
+    let pointerDownActive = false;
+    let isDragging = false;
+    let activePointerId = null;
+
+    const onPointerMove = (e) => {
+      if (!pointerDownActive) return;
+      if (activePointerId != null && e.pointerId != null && e.pointerId !== activePointerId) return;
+
+      const clientX = e.clientX != null ? e.clientX : (e.touches ? e.touches[0].clientX : 0);
+      const clientY = e.clientY != null ? e.clientY : (e.touches ? e.touches[0].clientY : 0);
+      const dx = clientX - pointerStartX;
+      const dy = clientY - pointerStartY;
+      const distance = Math.hypot(dx, dy);
+
+      if (!isDragging && distance >= 4) {
+        isDragging = true;
+        header.style.touchAction = 'none';
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.style.userSelect = 'none';
+          document.body.style.webkitUserSelect = 'none';
+        }
+      }
+
+      if (isDragging) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        applyPosition(initialPanelLeft + dx, initialPanelTop + dy, panel);
+      }
+    };
+
+    const onPointerEnd = (e) => {
+      if (!pointerDownActive) return;
+      if (activePointerId != null && e && e.pointerId != null && e.pointerId !== activePointerId) return;
+
+      if (isDragging && e) {
+        if (e.cancelable) e.preventDefault();
+        try { e.stopPropagation(); } catch (_) {}
+      }
+
+      pointerDownActive = false;
+      const wasDragging = isDragging;
+      isDragging = false;
+      activePointerId = null;
+      header.style.touchAction = '';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+      }
+
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerEnd);
+        window.removeEventListener('pointercancel', onPointerEnd);
+        window.removeEventListener('touchmove', onPointerMove);
+        window.removeEventListener('touchend', onPointerEnd);
+        window.removeEventListener('touchcancel', onPointerEnd);
+        window.removeEventListener('mousemove', onPointerMove);
+        window.removeEventListener('mouseup', onPointerEnd);
+
+        if (wasDragging) {
+          const preventClickOnce = (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
+            window.removeEventListener('click', preventClickOnce, true);
+          };
+          window.addEventListener('click', preventClickOnce, true);
+          setTimeout(() => {
+            window.removeEventListener('click', preventClickOnce, true);
+          }, 100);
+        }
+      }
+    };
+
+    const onPointerStart = (e) => {
+      const target = e.target;
+      if (!target || target.closest('button, a, input, textarea, select, [role="button"]')) {
+        return;
+      }
+      if (e.button !== undefined && e.button !== 0) {
+        return;
+      }
+
+      const clientX = e.clientX != null ? e.clientX : (e.touches ? e.touches[0].clientX : 0);
+      const clientY = e.clientY != null ? e.clientY : (e.touches ? e.touches[0].clientY : 0);
+
+      pointerStartX = clientX;
+      pointerStartY = clientY;
+      const rect = panel.getBoundingClientRect();
+      initialPanelLeft = rect.left;
+      initialPanelTop = rect.top;
+      pointerDownActive = true;
+      isDragging = false;
+      activePointerId = e.pointerId != null ? e.pointerId : null;
+
+      if (typeof window !== 'undefined') {
+        if (typeof window.PointerEvent !== 'undefined') {
+          window.addEventListener('pointermove', onPointerMove, { passive: false });
+          window.addEventListener('pointerup', onPointerEnd);
+          window.addEventListener('pointercancel', onPointerEnd);
+        } else if (e.type === 'touchstart') {
+          window.addEventListener('touchmove', onPointerMove, { passive: false });
+          window.addEventListener('touchend', onPointerEnd);
+          window.addEventListener('touchcancel', onPointerEnd);
+        } else {
+          window.addEventListener('mousemove', onPointerMove);
+          window.addEventListener('mouseup', onPointerEnd);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.PointerEvent !== 'undefined') {
+      header.addEventListener('pointerdown', onPointerStart);
+    } else {
+      header.addEventListener('mousedown', onPointerStart);
+      header.addEventListener('touchstart', onPointerStart, { passive: true });
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', () => {
+      const panel = document.getElementById('car-data-helper-panel');
+      if (panel && panel.style.display !== 'none' && savedPosition) {
+        applyPosition(savedPosition.left, savedPosition.top, panel);
+      }
+    });
+  }
+
   function createHelperPanel() {
     if (document.getElementById('car-data-helper-panel')) return;
+
+    const minMargin = 8;
+    const vpWidth = window.innerWidth || document.documentElement.clientWidth || 360;
+    const panelWidth = Math.min(420, vpWidth - (minMargin * 2));
 
     const panel = document.createElement('div');
     panel.id = 'car-data-helper-panel';
@@ -1494,8 +1730,10 @@
       position: fixed;
       top: 16px;
       right: 16px;
-      width: 440px;
-      max-height: calc(100vh - 32px);
+      width: min(420px, calc(100vw - 20px));
+      max-width: calc(100vw - 16px);
+      max-height: calc(100vh - 24px);
+      box-sizing: border-box;
       background: #ffffff;
       color: #0f172a;
       border: 1px solid #cbd5e1;
@@ -1510,17 +1748,18 @@
     `;
 
     panel.innerHTML = `
-      <div id="car-panel-header" style="background:#0f172a; color:#f8fafc; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; cursor:move; user-select:none;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:16px;">🚗</span>
-          <div>
+      <div id="car-panel-header" style="background:#0f172a; color:#f8fafc; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; cursor:move; user-select:none; -webkit-user-select:none; box-sizing:border-box;">
+        <div style="display:flex; align-items:center; gap:8px; pointer-events:none; min-width:0; overflow:hidden;">
+          <span style="font-size:16px; flex-shrink:0;">🚗</span>
+          <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
             <strong style="font-size:13px; letter-spacing:0.3px;">Car Data Entry Helper</strong>
             <span style="font-size:10px; background:#3b82f6; color:#ffffff; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:700;">v${SCRIPT_VERSION}</span>
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:6px;">
+        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
           <button id="car-panel-reextract" title="Re-extract live data" style="background:#334155; color:#f8fafc; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600;">🔄 Re-extract</button>
           <button id="car-panel-toggle" title="Minimize / Expand" style="background:transparent; color:#94a3b8; border:none; font-size:14px; cursor:pointer; padding:2px 6px;">➖</button>
+          <button id="car-panel-close" title="Close / Hide Helper" style="background:transparent; color:#94a3b8; border:none; font-size:16px; font-weight:700; cursor:pointer; padding:2px 6px; line-height:1; border-radius:4px;">✕</button>
         </div>
       </div>
 
@@ -1542,7 +1781,17 @@
 
     document.body.appendChild(panel);
 
+    createOpenHelperButton();
+
+    const header = panel.querySelector('#car-panel-header');
+    initDraggablePanel(panel, header);
+
+    const initialLeft = Math.max(minMargin, vpWidth - panelWidth - 16);
+    const initialTop = 16;
+    applyPosition(initialLeft, initialTop, panel);
+
     panel.querySelector('#car-panel-reextract').onclick = () => runExtraction();
+    panel.querySelector('#car-panel-close').onclick = () => closeHelperPanel();
     panel.querySelector('#car-panel-toggle').onclick = () => {
       const body = panel.querySelector('#car-panel-body');
       const footer = panel.querySelector('#car-panel-footer');
@@ -1558,6 +1807,9 @@
         footer.style.display = 'none';
         sumBar.style.display = 'none';
         btn.textContent = '➕';
+      }
+      if (savedPosition) {
+        applyPosition(savedPosition.left, savedPosition.top, panel);
       }
     };
 
@@ -2507,6 +2759,15 @@
     window.CarDataHelperValidators = Validators;
     window.CarDataHelperClipboard = { copyToClipboard };
     window.CarDataHelperAutoReveal = autoRevealShowNumber;
+    window.CarDataHelperUI = {
+      createHelperPanel,
+      closeHelperPanel,
+      openHelperPanel,
+      clampPosition,
+      applyPosition,
+      getSavedPosition: () => savedPosition,
+      initDraggablePanel
+    };
   }
 
   // Active initialization
