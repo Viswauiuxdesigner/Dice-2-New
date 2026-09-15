@@ -39,7 +39,7 @@ if ($bmwRaw -match '<pre id="bmw-out"[^>]*>([\s\S]*?)</pre>') {
 }
 
 Write-Output "`n=== TESTING SMART PASTE SUITE (ONE-PASTE, FORM FILL, EXCLUSIONS, STALE DATA) ==="
-$p4 = Start-Process -FilePath 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ArgumentList '--headless', '--dump-dom', '--allow-file-access-from-files', '--virtual-time-budget=4000', 'file:///C:/Dice/docs/test-smart-paste.html' -NoNewWindow -PassThru -RedirectStandardOutput 'smart-paste-out.html'
+$p4 = Start-Process -FilePath 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ArgumentList '--headless', '--dump-dom', '--allow-file-access-from-files', '--disable-web-security', '--user-data-dir=C:\Users\407206\AppData\Local\Temp\edge-sp-test', '--virtual-time-budget=2000', 'file:///C:/Dice/docs/test-smart-paste.html' -NoNewWindow -PassThru -RedirectStandardOutput 'smart-paste-out.html'
 $p4.WaitForExit(10000)
 $spRaw = Get-Content 'smart-paste-out.html' -Raw
 if ($spRaw -match '<pre id="test-results"[^>]*>([\s\S]*?)</pre>') {

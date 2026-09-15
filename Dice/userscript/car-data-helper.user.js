@@ -77,14 +77,22 @@
     normalizeFeatures(val) {
       if (!val) return '';
       if (Array.isArray(val)) {
-        return val.map(f => this.cleanText(typeof f === 'object' ? (f.name || f.title || f.label || '') : f)).filter(Boolean).join('\n');
+        return val
+          .map(f => this.normalizeFeatures(typeof f === 'object' ? (f.name || f.title || f.label || '') : f))
+          .filter(Boolean)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
       }
       if (typeof val === 'string') {
         return val
+          .replace(/([A-Z0-9])([A-Z][a-z])/g, '$1 $2')
           .split(/\r?\n/)
           .map(f => this.cleanText(f))
           .filter(Boolean)
-          .join('\n');
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
       }
       return '';
     },
@@ -1404,7 +1412,7 @@
     { key: 'dealerName', label: 'Dealer Name' },
     { key: 'dealerAddress', label: 'Dealer Address' },
     { key: 'averageRating', label: 'Average Rating' },
-    { key: 'features', label: 'Features (Newline-separated)' },
+    { key: 'features', label: 'Features' },
     { key: 'description', label: 'Description' },
     { key: 'vehicleHighlights', label: 'Vehicle Highlights' },
     { key: 'price', label: 'Price' },
@@ -1462,21 +1470,14 @@
         event.stopImmediatePropagation();
       } catch (e) {}
     }
-    const cleanStr = (text == null) ? '' : String(text);
+    let cleanStr = (text == null) ? '' : String(text);
     if (!cleanStr.trim() || cleanStr.trim() === 'Missing / Needs Review') {
       alert('This field is missing or unextracted on this listing.');
       return;
     }
 
     if (fieldKey === 'features' || (fieldLabel && fieldLabel.includes('Features'))) {
-      const debugObj = {
-        featuresCopySource: cleanStr,
-        featuresCopySourceJSON: JSON.stringify(cleanStr),
-        length: cleanStr.length,
-        newlinesCount: (cleanStr.match(/\n/g) || []).length
-      };
-      console.log('📋 [FEATURES COPY DIAGNOSTIC]:', debugObj);
-      alert(`[FEATURES COPY DIAGNOSTIC]\n\nLength: ${debugObj.length}\nNewlines count: ${debugObj.newlinesCount}\n\nJSON.stringify(clipboardValue):\n${debugObj.featuresCopySourceJSON}`);
+      cleanStr = Normalizers.normalizeFeatures(cleanStr);
     }
 
     const copyFallback = (str) => {
@@ -2699,7 +2700,7 @@
 
         const el = findFeaturesElement();
         if (el) {
-          const rawFeaturesText = String(fields.features).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+          const rawFeaturesText = Normalizers.normalizeFeatures(fields.features);
           if (el.isContentEditable) {
             el.innerText = rawFeaturesText;
             triggerEvents(el);

@@ -83,19 +83,27 @@ window.CarNormalizers = {
   },
 
   /**
-   * Normalize features to a newline-separated string
+   * Normalize features to a single space-separated horizontal string
    */
   normalizeFeatures(val) {
     if (!val) return '';
     if (Array.isArray(val)) {
-      return val.map(f => this.cleanText(typeof f === 'object' ? (f.name || f.title || f.label || '') : f)).filter(Boolean).join('\n');
+      return val
+        .map(f => this.normalizeFeatures(typeof f === 'object' ? (f.name || f.title || f.label || '') : f))
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
     if (typeof val === 'string') {
       return val
+        .replace(/([A-Z0-9])([A-Z][a-z])/g, '$1 $2')
         .split(/\r?\n/)
         .map(f => this.cleanText(f))
         .filter(Boolean)
-        .join('\n');
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
     return '';
   },

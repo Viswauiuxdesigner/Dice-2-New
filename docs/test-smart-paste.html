@@ -128,9 +128,9 @@
         assert(document.getElementById('target_used_or_new').value === 'Used', 'FIRST Condition control "Used Or New" is UNTOUCHED');
         assert(document.getElementById('target_condition_input').value === 'Excellent Condition', 'SECOND Condition field populated with source Condition value');
 
-        // FIX 2 TEST: Features formatting, spaces, and line breaks preserved exactly
-        const expectedMazdaFeatures = "Rubber Floor Mats\nRubber Load Space Mat\nOn The Road";
-        assert(document.getElementById('target_features_text').value === expectedMazdaFeatures, `Features textarea exact word spacing and newlines preserved (Got: "${document.getElementById('target_features_text').value}")`);
+        // FIX 2 TEST: Features formatting, spaces preserved exactly
+        const expectedMazdaFeatures = "Rubber Floor Mats Rubber Load Space Mat On The Road";
+        assert(document.getElementById('target_features_text').value === expectedMazdaFeatures, `Features textarea exact word spacing preserved (Got: "${document.getElementById('target_features_text').value}")`);
         
         // FIX 3 TEST: Contact Details Address receives dealerAddress
         assert(document.getElementById('target_contact_address').value === 'Cape Town, Western Cape', 'Contact Details Address receives Dealer Address value');
@@ -215,7 +215,7 @@
         `;
         document.body.appendChild(mockDiv);
 
-        const testFeaturesInput = "ABS Brakes\nAir Conditioning\nAirbags\nFull service record";
+        const testFeaturesInput = "ABS Brakes Air Conditioning Airbags Full service record";
 
         window.CarSmartPasteEngine.fillTargetForm(mockDiv, {
           condition: 'Excellent Condition',
@@ -228,7 +228,7 @@
         assert(mockDiv.querySelector('#fields_45').value === 'Excellent Condition', 'TEST A: #fields_45 populated with "Excellent Condition"');
 
         // TEST B Assertions
-        assert(mockDiv.querySelector('#fields_features').value === testFeaturesInput, 'TEST B: Features textarea matches EXACT spaces and newlines');
+        assert(mockDiv.querySelector('#fields_features').value === testFeaturesInput, 'TEST B: Features textarea matches EXACT spaces');
 
         // TEST C Assertions
         assert(mockDiv.querySelector('#dealer_address').value === 'Pretoria, Gauteng', 'TEST C: Dealer Address receives "Pretoria, Gauteng"');
@@ -271,15 +271,12 @@
         const mockSourceDoc = parser.parseFromString(hiluxHtml, 'text/html');
 
         const extractedHilux = window.CarSourceExtractor.extractFromDocument(mockSourceDoc).normalized;
-        assert(extractedHilux.features.includes('\n'), 'Features extracted as multi-line string');
-        const extractedLines = extractedHilux.features.split('\n');
-        assert(extractedLines.length === 19, `Extracted exact 19 separate feature items (Got: ${extractedLines.length})`);
-        assert(extractedLines[0] === 'ABS Brakes', 'First feature is "ABS Brakes"');
-        assert(extractedLines[1] === 'Air Conditioning', 'Second feature preserves internal space: "Air Conditioning"');
-        assert(extractedLines[5] === 'EBD Electronic Brake Distribution', 'Long feature preserves spaces: "EBD Electronic Brake Distribution"');
-        assert(extractedLines[8] === 'ESP Electronic Stability Program', 'Feature 9: "ESP Electronic Stability Program"');
-        assert(extractedLines[18] === 'USB Input', 'Feature 19: "USB Input"');
+        const expectedHiluxFeatures = 'ABS Brakes Air Conditioning Airbags Bluetooth Ready Drink Holder EBD Electronic Brake Distribution Electric Mirrors Electric Windows ESP Electronic Stability Program Full Service History Full Spare Wheel Immobilizer Manual One Owner Power Steering Radio/CD/MP3 Rubberized Load Body Trip Computer USB Input';
+        assert(!extractedHilux.features.includes('\n'), 'Features extracted as horizontal string without newlines');
+        assert(extractedHilux.features === expectedHiluxFeatures, `Features extracted with exact single spaces (Got: "${extractedHilux.features}")`);
         assert(!extractedHilux.features.includes('ABS BrakesAir Conditioning'), 'Features are NOT merged without spaces');
+        assert(extractedHilux.features.includes('Air Conditioning'), 'Internal space preserved for "Air Conditioning"');
+        assert(extractedHilux.features.includes('EBD Electronic Brake Distribution'), 'Long feature preserves spaces: "EBD Electronic Brake Distribution"');
 
         // Test 8B: Condition Fail-Safe (Single Condition control remains untouched)
         const singleCondDiv = document.createElement('div');
@@ -325,18 +322,17 @@
         `;
         const caddyDoc = parser.parseFromString(caddyHtml, 'text/html');
         const caddyExt = window.CarSourceExtractor.extractFromDocument(caddyDoc).normalized;
-        const caddyFeatures = caddyExt.features.split('\n');
+        const caddyFeaturesExpected = 'Air Conditioning Alarm Auxiliary Input Central Locking Manual Power Steering Radio/CD';
 
-        assert(caddyFeatures.length === 7, `Extracted exact 7 features from Caddy grid (Got: ${caddyFeatures.length})`);
-        assert(caddyFeatures[0] === 'Air Conditioning', `First feature is "Air Conditioning" (Got: "${caddyFeatures[0]}")`);
-        assert(caddyFeatures[0] !== 'Volkswagen', 'First feature is NOT "Volkswagen"');
+        assert(caddyExt.features === caddyFeaturesExpected, `Extracted exact features from Caddy grid (Got: "${caddyExt.features}")`);
+        assert(caddyExt.features.startsWith('Air Conditioning'), `First feature is "Air Conditioning" (Got: "${caddyExt.features.split(' ')[0]}")`);
         assert(!caddyExt.features.includes('Volkswagen'), 'Features do NOT contain breadcrumb text "Volkswagen"');
         assert(!caddyExt.features.includes('Caddy'), 'Features do NOT contain model name "Caddy"');
         assert(!caddyExt.features.includes('Panel Van'), 'Features do NOT contain derivative "Panel Van"');
         assert(!caddyExt.features.includes('Clean commercial van'), 'Features do NOT contain description text');
-        assert(caddyFeatures[1] === 'Alarm', 'Feature 2 is "Alarm"');
-        assert(caddyFeatures[5] === 'Power Steering', 'Feature 6 preserves internal space: "Power Steering"');
-        assert(caddyFeatures[6] === 'Radio/CD', 'Feature 7 is "Radio/CD"');
+        assert(caddyExt.features.includes('Alarm'), 'Feature "Alarm" is present');
+        assert(caddyExt.features.includes('Power Steering'), 'Feature "Power Steering" preserves internal space');
+        assert(caddyExt.features.includes('Radio/CD'), 'Feature "Radio/CD" is present');
 
         // Test 8D: Absent Features Section returns empty / Missing
         const absentFeaturesHtml = `<!DOCTYPE html><html><body><h1>2020 Ford Ranger</h1><div class="description">Only description</div></body></html>`;
@@ -360,14 +356,15 @@
         `;
         const multiSpanDoc = parser.parseFromString(multiSpanHtml, 'text/html');
         const multiSpanExt = window.CarSourceExtractor.extractFromDocument(multiSpanDoc).normalized;
-        const multiSpanLines = multiSpanExt.features.split('\n');
+        const expectedMultiSpan = 'Air Conditioning Power Steering EBD Electronic Brake Distribution Radio/CD/MP3';
 
-        assert(multiSpanLines[0] === 'Air Conditioning', `Multi-span "Air Conditioning" space preserved (Got: "${multiSpanLines[0]}")`);
-        assert(multiSpanLines[1] === 'Power Steering', `Multi-span "Power Steering" space preserved (Got: "${multiSpanLines[1]}")`);
-        assert(multiSpanLines[2] === 'EBD Electronic Brake Distribution', `Multi-span "EBD Electronic Brake Distribution" spaces preserved (Got: "${multiSpanLines[2]}")`);
-        assert(multiSpanLines[3] === 'Radio/CD/MP3', `Multi-span "Radio/CD/MP3" preserved (Got: "${multiSpanLines[3]}")`);
+        assert(multiSpanExt.features === expectedMultiSpan, `Multi-span features spaces preserved (Got: "${multiSpanExt.features}")`);
+        assert(multiSpanExt.features.includes('Air Conditioning'), 'Multi-span "Air Conditioning" space preserved');
+        assert(multiSpanExt.features.includes('Power Steering'), 'Multi-span "Power Steering" space preserved');
+        assert(multiSpanExt.features.includes('EBD Electronic Brake Distribution'), 'Multi-span "EBD Electronic Brake Distribution" spaces preserved');
+        assert(multiSpanExt.features.includes('Radio/CD/MP3'), 'Multi-span "Radio/CD/MP3" preserved');
 
-        // Test 8F: Real Firefox Android Regression - 8 Features items separated by newlines
+        // Test 8F: Real Firefox Android Regression - 8 Features items separated by single space
         const real8ItemsHtml = `
           <!DOCTYPE html><html><body>
           <div class="features-wrapper">
@@ -389,18 +386,11 @@
         `;
         const real8Doc = parser.parseFromString(real8ItemsHtml, 'text/html');
         const real8Ext = window.CarSourceExtractor.extractFromDocument(real8Doc).normalized;
-        const real8Lines = real8Ext.features.split('\n');
+        const expected8 = 'Air Conditioning Power Steering Automatic Brake System Radio / CD Security System Air Bag Central Locking Electric Windows';
 
-        assert(real8Lines.length === 8, `Extracted exact 8 features from real layout (Got: ${real8Lines.length})`);
-        assert(real8Lines[0] === 'Air Conditioning', `Feature 1 is "Air Conditioning" (Got: "${real8Lines[0]}")`);
-        assert(real8Lines[1] === 'Power Steering', `Feature 2 is "Power Steering" (Got: "${real8Lines[1]}")`);
-        assert(real8Lines[2] === 'Automatic Brake System', `Feature 3 is "Automatic Brake System" (Got: "${real8Lines[2]}")`);
-        assert(real8Lines[3] === 'Radio / CD', `Feature 4 is "Radio / CD" (Got: "${real8Lines[3]}")`);
-        assert(real8Lines[4] === 'Security System', `Feature 5 is "Security System" (Got: "${real8Lines[4]}")`);
-        assert(real8Lines[5] === 'Air Bag', `Feature 6 is "Air Bag" (Got: "${real8Lines[5]}")`);
-        assert(real8Lines[6] === 'Central Locking', `Feature 7 is "Central Locking" (Got: "${real8Lines[6]}")`);
-        assert(real8Lines[7] === 'Electric Windows', `Feature 8 is "Electric Windows" (Got: "${real8Lines[7]}")`);
-        assert(!real8Ext.features.includes('Air ConditioningPower Steering'), 'Features are NOT concatenated without newline');
+        assert(real8Ext.features === expected8, `Extracted exact 8 features horizontally with single spaces (Got: "${real8Ext.features}")`);
+        assert(!real8Ext.features.includes('\n'), 'Features do NOT contain newlines');
+        assert(!real8Ext.features.includes('Air ConditioningPower Steering'), 'Features are NOT concatenated without space');
         assert(!real8Ext.features.includes('Corolla'), 'Features do NOT contain vehicle title "Corolla"');
         assert(!real8Ext.features.includes('daily runner'), 'Features do NOT contain description text');
 
@@ -435,21 +425,10 @@
         `;
         const nextDataMergedDoc = parser.parseFromString(nextDataMergedHtml, 'text/html');
         const nextDataMergedExt = window.CarSourceExtractor.extractFromDocument(nextDataMergedDoc).normalized;
-        const nextDataMergedLines = nextDataMergedExt.features.split('\n');
+        const expected8Features = 'Air Conditioning Power Steering Automatic Brake System Radio / CD Security System Air Bag Central Locking Electric Windows';
 
-        const expected8Features = [
-          'Air Conditioning',
-          'Power Steering',
-          'Automatic Brake System',
-          'Radio / CD',
-          'Security System',
-          'Air Bag',
-          'Central Locking',
-          'Electric Windows'
-        ].join('\n');
-
-        assert(nextDataMergedLines.length === 8, `Extractor prioritized real DOM 8 items over __NEXT_DATA__ merged string (Got: ${nextDataMergedLines.length})`);
-        assert(nextDataMergedExt.features === expected8Features, `Extracted Features exactly match newline-separated string`);
+        assert(nextDataMergedExt.features === expected8Features, `Extractor prioritized real DOM items over __NEXT_DATA__ merged string (Got: "${nextDataMergedExt.features}")`);
+        assert(!nextDataMergedExt.features.includes('\n'), 'Features output has no newlines');
         assert(!nextDataMergedExt.features.includes('Air ConditioningPower Steering'), 'Output does NOT contain merged string from __NEXT_DATA__');
 
         // Test 8H: Exact 7-Item Reference Listing (Air Conditioner, Airbags, Power Steering, Alloy Wheels, Infotainment Unit, Reverse Camera, 5 Seater)
@@ -471,21 +450,11 @@
         `;
         const ref7Doc = parser.parseFromString(ref7Html, 'text/html');
         const ref7Ext = window.CarSourceExtractor.extractFromDocument(ref7Doc).normalized;
-        const ref7Lines = ref7Ext.features.split('\n');
+        const expected7Features = 'Air Conditioner Airbags Power Steering Alloy Wheels Infotainment Unit Reverse Camera 5 Seater';
 
-        const expected7Features = [
-          'Air Conditioner',
-          'Airbags',
-          'Power Steering',
-          'Alloy Wheels',
-          'Infotainment Unit',
-          'Reverse Camera',
-          '5 Seater'
-        ].join('\n');
-
-        assert(ref7Lines.length === 7, `Extracted exact 7 features from reference listing (Got: ${ref7Lines.length})`);
-        assert(ref7Ext.features === expected7Features, `Extracted 7 Features exactly match newline-separated string`);
-        assert(!ref7Ext.features.includes('Air ConditionerAirbags'), 'Features are NOT concatenated without newlines');
+        assert(ref7Ext.features === expected7Features, `Extracted 7 Features exactly match single-space separated string (Got: "${ref7Ext.features}")`);
+        assert(!ref7Ext.features.includes('\n'), 'Features are NOT separated with newlines');
+        assert(!ref7Ext.features.includes('Air ConditionerAirbags'), 'Features are NOT concatenated without space');
         assert(ref7Ext.features.includes('Air Conditioner'), 'Internal space preserved for "Air Conditioner"');
         assert(ref7Ext.features.includes('Power Steering'), 'Internal space preserved for "Power Steering"');
         assert(ref7Ext.features.includes('Alloy Wheels'), 'Internal space preserved for "Alloy Wheels"');
@@ -493,9 +462,60 @@
         assert(ref7Ext.features.includes('Reverse Camera'), 'Internal space preserved for "Reverse Camera"');
         assert(ref7Ext.features.includes('5 Seater'), 'Internal space preserved for "5 Seater"');
 
+        // Test 8K: User Spec Regression Suite for Features COPY / Smart Paste Spacing
+        log('\n=== TEST 8K: FEATURES SPACING, CASING & DYNAMIC COUNT REGRESSION TESTS ===');
+        const norm = window.CarNormalizers || window.CarDataHelperNormalizers;
+
+        // 1. FeatureAFeatureBFeatureC -> FeatureA FeatureB FeatureC
+        const testMergedPascal = 'FeatureAFeatureBFeatureC';
+        const normMergedPascal = norm.normalizeFeatures(testMergedPascal);
+        assert(normMergedPascal === 'FeatureA FeatureB FeatureC', `FeatureAFeatureBFeatureC separated into "FeatureA FeatureB FeatureC" (Got: "${normMergedPascal}")`);
+
+        // 2. Air Conditioning, Alloy Wheels, Bluetooth, CentralLocking, CruiseControl, Electric Windows, Leather Seats
+        const testProblemArray = ['Air Conditioning', 'Alloy Wheels', 'Bluetooth', 'CentralLocking', 'CruiseControl', 'Electric Windows', 'Leather Seats'];
+        const normProblemInput = norm.normalizeFeatures(testProblemArray);
+        const expectedProblemOutput = 'Air Conditioning Alloy Wheels Bluetooth CentralLocking CruiseControl Electric Windows Leather Seats';
+        assert(normProblemInput === expectedProblemOutput, `Problematic features array normalized with exact single spaces (Got: "${normProblemInput}")`);
+
+        // 3. Existing spaces inside a feature name are preserved (Air Conditioning, Alloy Wheels, Electric Windows, Leather Seats)
+        assert(normProblemInput.includes('Air Conditioning'), 'Internal space preserved for "Air Conditioning"');
+        assert(normProblemInput.includes('Alloy Wheels'), 'Internal space preserved for "Alloy Wheels"');
+        assert(normProblemInput.includes('Electric Windows'), 'Internal space preserved for "Electric Windows"');
+        assert(normProblemInput.includes('Leather Seats'), 'Internal space preserved for "Leather Seats"');
+
+        // 4. Feature wording, spelling, and casing are preserved (CentralLocking and CruiseControl remain intact)
+        assert(normProblemInput.includes('CentralLocking'), 'Casing and spelling preserved for "CentralLocking"');
+        assert(normProblemInput.includes('CruiseControl'), 'Casing and spelling preserved for "CruiseControl"');
+
+        // 5. Feature order is preserved
+        const problemTokens = normProblemInput.split(' ');
+        assert(problemTokens[0] === 'Air' && problemTokens[1] === 'Conditioning', 'First feature is Air Conditioning');
+        assert(problemTokens[2] === 'Alloy' && problemTokens[3] === 'Wheels', 'Second feature is Alloy Wheels');
+        assert(problemTokens[4] === 'Bluetooth', 'Third feature is Bluetooth');
+        assert(problemTokens[5] === 'CentralLocking', 'Fourth feature is CentralLocking');
+        assert(problemTokens[6] === 'CruiseControl', 'Fifth feature is CruiseControl');
+        assert(problemTokens[7] === 'Electric' && problemTokens[8] === 'Windows', 'Sixth feature is Electric Windows');
+        assert(problemTokens[9] === 'Leather' && problemTokens[10] === 'Seats', 'Seventh feature is Leather Seats');
+
+        // 6. Dynamic feature counts work (1, 2, 3, 5 items)
+        const count1 = ['Sunroof'];
+        assert(norm.normalizeFeatures(count1) === 'Sunroof', 'Dynamic count: 1 item normalized correctly');
+
+        const count2 = ['ABS', 'Airbags'];
+        assert(norm.normalizeFeatures(count2) === 'ABS Airbags', 'Dynamic count: 2 items normalized correctly');
+
+        const count3 = ['Climate Control', 'Keyless Go', 'Navigation'];
+        assert(norm.normalizeFeatures(count3) === 'Climate Control Keyless Go Navigation', 'Dynamic count: 3 items normalized correctly');
+
+        const count5 = ['Item One', 'Item Two', 'Item Three', 'Item Four', 'Item Five'];
+        assert(norm.normalizeFeatures(count5) === 'Item One Item Two Item Three Item Four Item Five', 'Dynamic count: 5 items normalized correctly');
+
+        // 7. No newlines or blank lines exist in output
+        assert(!normProblemInput.includes('\n') && !normProblemInput.includes('\r'), 'No newlines in normalized features output');
+
         // Test 9: Features COPY / Clipboard Regression Tests
         log('\n=== TEST 9: FEATURES COPY / CLIPBOARD REGRESSION TESTS ===');
-        const testFeaturesClipboardInput = "Air Conditioner\nAirbags\nPower Steering\nAlloy Wheels\nInfotainment Unit\nReverse Camera\n5 Seater";
+        const testFeaturesClipboardInput = "Air Conditioner Airbags Power Steering Alloy Wheels Infotainment Unit Reverse Camera 5 Seater";
 
         // Test 9A: GM_setClipboard path (Tampermonkey Android native bridge)
         let gmClipboardReceived = null;
@@ -505,9 +525,8 @@
 
         window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
         assert(gmClipboardReceived !== null, 'GM_setClipboard was called');
-        assert(gmClipboardReceived.includes('\n') === true, 'GM_setClipboard value includes "\\n"');
-        assert(gmClipboardReceived.split('\n').length === 7, 'GM_setClipboard value split("\\n").length === 7');
-        assert(gmClipboardReceived === testFeaturesClipboardInput, 'GM_setClipboard received EXACT unmodified 7-line Features string');
+        assert(gmClipboardReceived === testFeaturesClipboardInput, 'GM_setClipboard received EXACT single-space separated Features string');
+        assert(!gmClipboardReceived.includes('\n'), 'GM_setClipboard contains no newlines');
         assert(gmClipboardReceived !== "Air ConditionerAirbagsPower SteeringAlloy WheelsInfotainment UnitReverse Camera5 Seater", 'GM_setClipboard did NOT receive concatenated string');
 
         // Test 9B: navigator.clipboard.writeText path
@@ -526,9 +545,8 @@
 
         window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
         assert(navClipboardReceived !== null, 'navigator.clipboard.writeText was called');
-        assert(navClipboardReceived.includes('\n') === true, 'navigator.clipboard value includes "\\n"');
-        assert(navClipboardReceived.split('\n').length === 7, 'navigator.clipboard value split("\\n").length === 7');
-        assert(navClipboardReceived === testFeaturesClipboardInput, 'navigator.clipboard received EXACT unmodified 7-line Features string');
+        assert(navClipboardReceived === testFeaturesClipboardInput, 'navigator.clipboard received EXACT single-space separated Features string');
+        assert(!navClipboardReceived.includes('\n'), 'navigator.clipboard contains no newlines');
 
         // Test 9C: In-DOM mobile-safe fallback path
         Object.defineProperty(navigator, 'clipboard', {
@@ -537,27 +555,34 @@
         });
         let execCommandCopiedText = null;
         const origExecCommand = document.execCommand;
-        document.execCommand = (cmd) => {
-          if (cmd === 'copy') {
-            const activeEl = document.activeElement;
-            if (activeEl && activeEl.tagName === 'TEXTAREA') {
-              execCommandCopiedText = activeEl.value.substring(activeEl.selectionStart, activeEl.selectionEnd);
-            }
-          }
-          return true;
-        };
+        try {
+          Object.defineProperty(document, 'execCommand', {
+            value: (cmd) => {
+              if (cmd === 'copy') {
+                const activeEl = document.activeElement;
+                if (activeEl && activeEl.tagName === 'TEXTAREA') {
+                  execCommandCopiedText = activeEl.value.substring(activeEl.selectionStart, activeEl.selectionEnd);
+                }
+              }
+              return true;
+            },
+            configurable: true
+          });
 
-        window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
-        assert(execCommandCopiedText !== null, 'execCommand copy captured selected text');
-        assert(execCommandCopiedText.includes('\n') === true, 'Fallback selection includes "\\n"');
-        assert(execCommandCopiedText.split('\n').length === 7, 'Fallback selection split("\\n").length === 7');
-        assert(execCommandCopiedText === testFeaturesClipboardInput, 'Fallback selection captured EXACT unmodified 7-line Features string');
+          window.CarDataHelperClipboard.copyToClipboard(testFeaturesClipboardInput, null, null, 'Features', 'features');
+          assert(execCommandCopiedText !== null, 'execCommand copy captured selected text');
+          assert(execCommandCopiedText === testFeaturesClipboardInput, 'Fallback selection captured EXACT single-space separated Features string');
+          assert(!execCommandCopiedText.includes('\n'), 'Fallback selection contains no newlines');
+        } finally {
+          if (origExecCommand) {
+            Object.defineProperty(document, 'execCommand', { value: origExecCommand, configurable: true });
+          }
+        }
 
         // Restore environment
         if (origClipboard) {
           Object.defineProperty(navigator, 'clipboard', { value: origClipboard, configurable: true });
         }
-        document.execCommand = origExecCommand;
 
         // === TEST 10: CONTACT NUMBER — AUTOMATIC EXTRACTION, REVEAL, COPY & SMART PASTE ===
         log('\n=== TEST 10: CONTACT NUMBER FULL INTEGRATION SUITE (TESTS A - I) ===');
@@ -640,7 +665,7 @@
             dealerName: 'SMG JETOUR Harbour Arch',
             dealerAddress: 'Cape Town, Western Cape',
             averageRating: '4.2 (322 Reviews)',
-            features: "Rubber Floor Mats\nRubber Load Space Mat\nOn The Road",
+            features: "Rubber Floor Mats Rubber Load Space Mat On The Road",
             description: 'Introducing the stylish Mazda 2...',
             vehicleHighlights: "Fuel Efficiency\n5.7 l/100km",
             price: '249900',
@@ -664,7 +689,7 @@
         assert(document.getElementById('target_contact_address').value === 'Cape Town, Western Cape', 'TEST H: Target Contact Details Address received "Cape Town, Western Cape"');
 
         // TEST 10I (TEST I) — FEATURES & HIGHLIGHTS UNTOUCHED
-        assert(document.getElementById('target_features_text').value === "Rubber Floor Mats\nRubber Load Space Mat\nOn The Road", 'TEST I: Features formatting and newlines remain completely intact');
+        assert(document.getElementById('target_features_text').value === "Rubber Floor Mats Rubber Load Space Mat On The Road", 'TEST I: Features formatting and spaces remain completely intact');
 
         // === TEST 11: HELPER PANEL UI, DRAG, CLOSE, AND REOPEN INTEGRATION ===
         log('\n=== TEST 11: HELPER PANEL UI, DRAG, CLOSE, AND REOPEN INTEGRATION ===');
@@ -993,7 +1018,7 @@
         log('ALL AUTOMATED TESTS COMPLETED SUCCESSFULLY!');
         log('========================================');
       } catch (err) {
-        log(`\nTEST SUITE FAILED: ${err.message}`);
+        log(`\nTEST SUITE FAILED: ${err.message}\n${err.stack || ''}`);
       }
     }
 
