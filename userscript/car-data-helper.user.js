@@ -1152,7 +1152,7 @@
         const rawLines = text.split('\n');
         const cleanLines = rawLines
           .map(l => l.replace(/[ \t]+/g, ' ').trim())
-          .filter(l => l.length > 0 && !/^(?:vehicle\s+|key\s+|car\s+)?highlights:?$/i.test(l) && !hasCssArtifacts(l));
+          .filter(l => l.length > 0 && !/^(?:vehicle\s+|key\s+|car\s+)?highlights(?:\s*\(\d+\))?:?$/i.test(l) && !hasCssArtifacts(l));
 
         const uniqueLines = [];
         for (const line of cleanLines) {
@@ -1164,9 +1164,15 @@
       };
 
       // 1. Locate heading element for Vehicle Highlights (prefer deepest element containing the heading text)
-      const highlightHeadingCandidates = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b, [class*="heading"], [class*="title"], summary, p, div, span')).filter(el => {
+      const highlightHeadingCandidates = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"], strong, b, [class*="heading"], [class*="title"], summary, p, div, span')).filter(el => {
         const t = (el.textContent || '').trim();
-        return /^(?:Vehicle\s+|Key\s+|Car\s+)?Highlights(?:\s*\(\d+\))?:?$/i.test(t) && t.length < 35 && !hasCssArtifacts(t);
+        if (!/^(?:Vehicle\s+|Key\s+|Car\s+)?Highlights(?:\s*\(\d+\))?:?$/i.test(t)) return false;
+        if (t.length > 35 || hasCssArtifacts(t)) return false;
+        if (/^(DIV|SPAN|P)$/i.test(el.tagName)) {
+          if (el.children.length > 2) return false;
+          if (el.textContent.trim().length > 35) return false;
+        }
+        return true;
       });
 
       // Deepest candidate element (avoids selecting outer section container)
@@ -1178,42 +1184,58 @@
         }, null);
       }
 
-      // 2. Identify candidate container(s) for the highlights section
+      // 2. Identify candidate container(s) strictly for the highlights section
       const highlightContainers = [];
 
       if (highlightHeading) {
-        // Sibling of heading
+        // Sibling of heading (e.g. <div class="highlights-grid"> or Mantine SimpleGrid)
         if (highlightHeading.nextElementSibling) {
           highlightContainers.push(highlightHeading.nextElementSibling);
         }
-        // Sibling of heading's immediate wrapper
-        if (highlightHeading.parentElement && highlightHeading.parentElement !== doc.body) {
+        // Sibling of heading's immediate wrapper (e.g. <div class="mantine-Group-root"><h3>Vehicle Highlights</h3></div>)
+        if (highlightHeading.parentElement && highlightHeading.parentElement !== doc.body && highlightHeading.parentElement !== doc.documentElement) {
           if (highlightHeading.parentElement.nextElementSibling) {
             highlightContainers.push(highlightHeading.parentElement.nextElementSibling);
           }
-          if (highlightHeading.parentElement.parentElement && highlightHeading.parentElement.parentElement !== doc.body) {
+          if (highlightHeading.parentElement.parentElement &&
+              highlightHeading.parentElement.parentElement !== doc.body &&
+              highlightHeading.parentElement.parentElement !== doc.documentElement &&
+              !/^(MAIN|BODY|HTML)$/i.test(highlightHeading.parentElement.parentElement.tagName) &&
+              !highlightHeading.parentElement.parentElement.classList?.contains('vehicle-view') &&
+              !highlightHeading.parentElement.parentElement.id?.includes('root')) {
             if (highlightHeading.parentElement.parentElement.nextElementSibling) {
               highlightContainers.push(highlightHeading.parentElement.parentElement.nextElementSibling);
             }
           }
         }
-        // Enclosing section / article / card
-        let p = highlightHeading.parentElement;
-        while (p && p !== doc.body && p.tagName !== 'BODY') {
-          highlightContainers.push(p);
-          p = p.parentElement;
+
+        // Enclosing highlights-specific section / container (strictly stop before main/body/vehicle-view/root)
+        const enclosingSection = highlightHeading.closest('[data-test*="highlight"], [data-testid*="highlight"], section[class*="highlight"], div[class*="highlights"], [class*="highlights-section"], .mantine-Container-root, section, article');
+        if (enclosingSection &&
+            enclosingSection !== doc.body &&
+            enclosingSection !== doc.documentElement &&
+            !/^(MAIN|BODY|HTML)$/i.test(enclosingSection.tagName) &&
+            !enclosingSection.classList?.contains('vehicle-view') &&
+            !enclosingSection.classList?.contains('page-container') &&
+            !enclosingSection.id?.includes('root') &&
+            !enclosingSection.id?.includes('next')) {
+          highlightContainers.push(enclosingSection);
         }
+      } else {
+        // If NO heading is found, ONLY accept containers explicitly dedicated to vehicle highlights
+        const explicitContainers = doc.querySelectorAll('[data-test="vehicle-highlights"], [data-testid="vehicle-highlights"], [data-test="vehicle_highlights"], #vehicle-highlights, .vehicle-highlights, .highlights-section');
+        explicitContainers.forEach(el => highlightContainers.push(el));
       }
 
-      // Direct attribute selector candidates
-      const highlightDirectContainers = doc.querySelectorAll('[data-test*="highlight"], [data-testid*="highlight"], #vehicle-highlights, #highlights, .vehicle-highlights, .highlights-section, section[class*="highlight"], div[class*="highlights"]');
-      highlightDirectContainers.forEach(el => highlightContainers.push(el));
-
-      // 3. Find repeated card items inside containers
+      // 3. Find repeated card items inside scoped containers
       let extractedCards = [];
 
       for (const container of highlightContainers) {
         if (!container || extractedCards.length > 0) break;
+
+        // Make sure container is not an unrelated page wrapper
+        if (container === doc.body || container === doc.documentElement || /^(BODY|HTML|MAIN)$/i.test(container.tagName)) continue;
+        if (container.classList && (container.classList.contains('vehicle-view') || container.classList.contains('page-container'))) continue;
 
         // Strategy A: Direct repeated children of a grid/flex wrapper inside container
         const candidateWrappers = [container, ...Array.from(container.querySelectorAll('div, ul, ol, section, article'))];
@@ -1235,7 +1257,7 @@
               // Found exact repeated cards wrapper!
               extractedCards = validChildCards.map(lines => lines.join('\n'));
               break;
-            } else if (validChildCards.length >= 2 && validChildCards.length >= children.length * 0.6) {
+            } else if (validChildCards.length >= 1 && validChildCards.length >= children.length * 0.6) {
               // Found cards wrapper with some minor decorative sibling nodes
               extractedCards = validChildCards.map(lines => lines.join('\n'));
               break;
@@ -1243,7 +1265,7 @@
           }
         }
 
-        // Strategy B: If no clear wrapper found, gather leaf-like card elements
+        // Strategy B: If no clear wrapper found, gather leaf-like card elements within this highlights container
         if (extractedCards.length === 0) {
           const potentialCards = Array.from(container.querySelectorAll('div, li, article, section')).filter(el => {
             if (el === highlightHeading || el.contains(highlightHeading) || el === container) return false;
@@ -1280,17 +1302,18 @@
         vehicleHighlights = extractedCards.join('\n\n');
       }
 
-      // 4. Fallback: Deep recursive search in Next.js State (handles vehicle_highlights, key_highlights, etc.)
+      // 4. Fallback: Deep recursive search in Next.js State (ONLY for actual vehicle highlights keys, NEVER key_specs or insights)
       if (!vehicleHighlights && (nextDataProps || rawNextData)) {
         const searchNextDataHighlights = (obj, depth = 0) => {
           if (!obj || typeof obj !== 'object' || depth > 8) return null;
           for (const key of Object.keys(obj)) {
-            if (/^(?:vehicle_?highlights?|key_?highlights?|highlights?|vehicle_?insights?|insights?|specs?_?highlights?|selling_?points?|key_?specs?)$/i.test(key)) {
+            if (/^(?:vehicle_?highlights?|key_?highlights?|vehicle_?highlight_?cards?)$/i.test(key)) {
               const val = obj[key];
               if (Array.isArray(val) && val.length > 0) return val;
             }
           }
           for (const key of Object.keys(obj)) {
+            if (/^(?:specs|specifications|features|dealer|breadcrumbs|seo|finance|pricing)$/i.test(key)) continue;
             if (typeof obj[key] === 'object' && obj[key] !== null) {
               const res = searchNextDataHighlights(obj[key], depth + 1);
               if (res) return res;
