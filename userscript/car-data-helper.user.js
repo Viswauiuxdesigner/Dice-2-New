@@ -1,17 +1,22 @@
 // ==UserScript==
 // @name         Car Data Entry Helper
 // @namespace    local.car.helper
-// @version      2.2.4
-// @description  Local car data extraction helper for Cars.co.za listings (18 fields manual COPY workflow, semantic value-anchored extraction)
+// @version      2.3.0-DICE2
+// @description  Automatic Cars.co.za to DICE form-filling workflow with dependent dropdown sequencing and cross-tab GM event communication
 // @match        https://www.cars.co.za/*
 // @match        https://tamilnadu2026.dicewebfreelancers.com/*
 // @match        *://*/*cars-co-za-sample.html*
 // @match        *://*/*cars-co-za-ferrari-sample.html*
 // @match        *://*/*cars-co-za-suzuki-sample.html*
+// @match        *://*/*cars-co-za-bmw-sample.html*
+// @match        *://*/*dummy-target.html*
+// @match        *://*/*test-smart-paste.html*
+// @match        *://*/*test-dice-flow.html*
 // @match        file://*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @grant        GM_addValueChangeListener
 // @grant        GM_setClipboard
 // @run-at       document-end
 // ==UserScript==
@@ -19,8 +24,8 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '2.2.4-DIAGNOSTIC';
-  const BUILD_TIMESTAMP = '2026-09-11 09:35 UTC';
+  const SCRIPT_VERSION = '2.3.0-DICE2';
+  const BUILD_TIMESTAMP = '2026-09-19 10:20 UTC';
 
   // --- 1. NORMALIZERS ENGINE ---
   const Normalizers = {
@@ -1928,10 +1933,21 @@
         <!-- Fields will be dynamically injected -->
       </div>
 
-      <div id="car-panel-footer" style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
-        <button id="car-panel-copy-all" style="background:#2563eb; color:#ffffff; border:none; padding:6px 12px; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer; width:100%;">
-          📋 Copy All Extracted (JSON)
-        </button>
+      <div id="car-panel-footer" style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:10px 14px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:8px;">
+          <button id="car-panel-fill-dice" style="background:#16a34a; color:#ffffff; border:none; padding:8px 12px; border-radius:6px; font-weight:700; font-size:12px; cursor:pointer; flex:2; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.15s ease;">
+            ⚡ FILL FORM (DICE)
+          </button>
+          <button id="car-panel-dryrun-dice" style="background:#0284c7; color:#ffffff; border:none; padding:8px 10px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer; flex:1; display:flex; align-items:center; justify-content:center; gap:4px; transition:all 0.15s ease;">
+            🧪 DRY-RUN
+          </button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="car-panel-copy-all" style="background:#e2e8f0; color:#334155; border:1px solid #cbd5e1; padding:5px 8px; border-radius:5px; font-weight:600; font-size:11px; cursor:pointer; width:100%;">
+            📋 Copy JSON (Fallback)
+          </button>
+        </div>
+        <div id="car-panel-toast" style="display:none; font-size:11px; text-align:center; padding:4px 8px; border-radius:4px; font-weight:600;"></div>
       </div>
     `;
 
@@ -1969,10 +1985,24 @@
       }
     };
 
-    panel.querySelector('#car-panel-copy-all').onclick = (e) => {
-      const payload = {
+    const showToast = (msg, isSuccess = true) => {
+      const toast = panel.querySelector('#car-panel-toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.style.background = isSuccess ? '#dcfce7' : '#fee2e2';
+      toast.style.color = isSuccess ? '#15803d' : '#b91c1c';
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 4500);
+    };
+
+    const buildPayload = (actionType = 'autofill') => {
+      const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      return {
         marker: 'CAR_DATA_ENTRY_HELPER',
-        version: 1,
+        jobId: jobId,
+        action: actionType,
+        timestamp: Date.now(),
+        version: 2,
         source: 'cars.co.za',
         sourceUrl: currentExtractedData.sourceUrl || window.location.href,
         fields: {
@@ -1997,8 +2027,36 @@
           contactNumber: currentExtractedData.contactNumber || ''
         }
       };
+    };
+
+    panel.querySelector('#car-panel-fill-dice').onclick = () => {
+      const payload = buildPayload('autofill');
+      if (typeof GM_setValue === 'function') {
+        GM_setValue('DICE_PENDING_JOB', payload);
+      }
+      try {
+        localStorage.setItem('DICE_PENDING_JOB', JSON.stringify(payload));
+      } catch (e) {}
+      copyToClipboard(JSON.stringify(payload, null, 2));
+      showToast('✓ Sent to DICE tab! Open DICE tab to run automation.');
+    };
+
+    panel.querySelector('#car-panel-dryrun-dice').onclick = () => {
+      const payload = buildPayload('dryrun');
+      if (typeof GM_setValue === 'function') {
+        GM_setValue('DICE_PENDING_JOB', payload);
+      }
+      try {
+        localStorage.setItem('DICE_PENDING_JOB', JSON.stringify(payload));
+      } catch (e) {}
+      showToast('✓ Dry-Run sent to DICE tab!');
+    };
+
+    panel.querySelector('#car-panel-copy-all').onclick = (e) => {
+      const payload = buildPayload('autofill');
       const jsonStr = JSON.stringify(payload, null, 2);
       copyToClipboard(jsonStr, e.target);
+      showToast('✓ Copied JSON payload to clipboard');
     };
 
     autoRevealShowNumber(document);
@@ -2922,7 +2980,635 @@
     }
   };
 
-  // Expose SmartPasteEngine, CarsCoZaAdapter, and Clipboard for testing harnesses
+  // --- 6. DICE AUTOMATOR ENGINE ---
+  const DiceAutomator = (function () {
+    const Utils = {
+      sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); },
+      cleanText(str) { return (!str || typeof str !== 'string') ? '' : str.replace(/\s+/g, ' ').trim(); },
+      triggerEvents(el) {
+        if (!el) return;
+        try {
+          el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+        } catch (e) {}
+        try {
+          const win = el.ownerDocument?.defaultView || window;
+          const $ = win.$ || win.jQuery;
+          if ($ && typeof $(el).trigger === 'function') {
+            $(el).trigger('input').trigger('change').trigger('chosen:updated').trigger('select2:select');
+          }
+        } catch (e) {}
+      },
+      async waitFor(predicate, maxWaitMs = 6000, pollIntervalMs = 150) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWaitMs) {
+          try {
+            const res = predicate();
+            if (res) return res;
+          } catch (e) {}
+          await this.sleep(pollIntervalMs);
+        }
+        return null;
+      }
+    };
+
+    const DropdownManager = {
+      findDropdown(doc, criteria) {
+        if (!doc) doc = document;
+        if (criteria.selectors) {
+          for (const sel of criteria.selectors) {
+            try {
+              const el = doc.querySelector(sel);
+              if (el && this.isValidSelectElement(el)) return el;
+            } catch (e) {}
+          }
+        }
+        if (criteria.labels) {
+          const allLabels = doc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, div.control-label, th');
+          for (const lbl of allLabels) {
+            const lText = Utils.cleanText((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || ''));
+            for (const targetLabel of criteria.labels) {
+              const matches = typeof targetLabel === 'string'
+                ? lText.toLowerCase().includes(targetLabel.toLowerCase())
+                : targetLabel.test(lText);
+              if (matches) {
+                const forId = lbl.getAttribute('for');
+                if (forId) {
+                  const el = doc.getElementById(forId) || doc.querySelector('#' + CSS.escape(forId));
+                  if (el && this.isValidSelectElement(el)) return el;
+                }
+                const inside = lbl.querySelector('select, [role="combobox"], .chosen-container, .select2-container');
+                if (inside) return inside;
+                const container = lbl.closest('.control-group, .form-group, .demo-form-group, tr, td, .form-item, div') || lbl.parentElement;
+                if (container) {
+                  const siblingSelect = container.querySelector('select, [role="combobox"], .chosen-container, .select2-container');
+                  if (siblingSelect && this.isValidSelectElement(siblingSelect)) return siblingSelect;
+                }
+              }
+            }
+          }
+        }
+        if (criteria.names) {
+          for (const name of criteria.names) {
+            const el = doc.querySelector(`select[name="${name}"], select[id="${name}"], select[name*="${name}"], select[id*="${name}"]`);
+            if (el && this.isValidSelectElement(el)) return el;
+          }
+        }
+        return null;
+      },
+      isValidSelectElement(el) {
+        if (!el) return false;
+        const tag = el.tagName.toUpperCase();
+        return tag === 'SELECT' || el.classList.contains('chosen-container') || el.classList.contains('select2-container') || el.getAttribute('role') === 'combobox';
+      },
+      getOptions(control) {
+        if (!control) return [];
+        if (control.tagName === 'SELECT') {
+          return Array.from(control.options).map((opt, idx) => ({
+            index: idx,
+            value: opt.value,
+            text: Utils.cleanText(opt.text),
+            element: opt,
+            selected: opt.selected
+          }));
+        }
+        if (control.classList.contains('chosen-container') || control.classList.contains('select2-container')) {
+          const nativeSelect = control.parentElement?.querySelector('select') || control.previousElementSibling;
+          if (nativeSelect && nativeSelect.tagName === 'SELECT') return this.getOptions(nativeSelect);
+        }
+        const optionEls = control.querySelectorAll('[role="option"], li, .dropdown-item, a');
+        return Array.from(optionEls).map((el, idx) => ({
+          index: idx,
+          value: el.getAttribute('data-value') || el.getAttribute('value') || Utils.cleanText(el.textContent),
+          text: Utils.cleanText(el.textContent),
+          element: el,
+          selected: el.classList.contains('active') || el.classList.contains('selected') || el.getAttribute('aria-selected') === 'true'
+        }));
+      },
+      selectOption(control, targetValueOrText) {
+        if (!control || !targetValueOrText) return { success: false, error: 'Missing control or target option' };
+        const search = Utils.cleanText(String(targetValueOrText)).toLowerCase();
+        const options = this.getOptions(control);
+        if (options.length === 0) return { success: false, error: 'No options found in dropdown control' };
+
+        let matched = options.find(o => o.text.toLowerCase() === search);
+        if (!matched) matched = options.find(o => o.value.toLowerCase() === search);
+        if (!matched) matched = options.find(o => o.text.toLowerCase().includes(search));
+        if (!matched) matched = options.find(o => search.includes(o.text.toLowerCase()) && o.text.length > 2);
+        if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
+
+        if (!matched) {
+          return { success: false, error: `Option "${targetValueOrText}" not found. Available: [${options.map(o => `"${o.text}"`).join(', ')}]` };
+        }
+
+        if (control.tagName === 'SELECT') {
+          control.selectedIndex = matched.index;
+          control.value = matched.value;
+          if (matched.element) matched.element.selected = true;
+          Utils.triggerEvents(control);
+          try {
+            const win = control.ownerDocument?.defaultView || window;
+            const $ = win.$ || win.jQuery;
+            if ($) $(control).trigger('chosen:updated').trigger('change');
+          } catch (e) {}
+          return { success: true, selectedText: matched.text, selectedValue: matched.value };
+        }
+
+        if (matched.element) {
+          try { matched.element.click(); } catch (e) {
+            matched.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          }
+          return { success: true, selectedText: matched.text, selectedValue: matched.value };
+        }
+        return { success: false, error: 'Failed to apply selection' };
+      }
+    };
+
+    const DescriptionManager = {
+      findDescriptionControls(doc) {
+        if (!doc) doc = document;
+        const toggleButtons = Array.from(doc.querySelectorAll('button, a, .btn, [role="button"], input[type="button"]')).filter(el => {
+          const text = Utils.cleanText(el.textContent || el.value || '');
+          const onclick = (el.getAttribute('onclick') || '').toLowerCase();
+          const title = (el.getAttribute('title') || '').toLowerCase();
+          const idOrClass = `${el.id} ${el.className}`.toLowerCase();
+          return /toggle\s*editor/i.test(text) || /toggle\s*editor/i.test(title) || /toggleeditor/i.test(onclick) || /toggle-editor|editor-toggle/i.test(idOrClass);
+        });
+        const textarea = doc.querySelector('#target_description, #description, textarea[name="description"], textarea[name*="description"]');
+        const iframe = doc.querySelector('#description_ifr, iframe[id*="description"], .tox-edit-area iframe, .mce-edit-area iframe');
+        const contentEditable = doc.querySelector('#target_description[contenteditable="true"], #description[contenteditable="true"], [name="description"][contenteditable="true"], div.note-editable, .tox-edit-area [contenteditable="true"]');
+        return { toggleEditorBtn: toggleButtons[0] || null, textarea, iframe, contentEditable };
+      },
+      async ensureAndFillDescription(doc, rawDescription, log) {
+        if (!rawDescription) return { success: false, error: 'No description text provided' };
+        const htmlContent = formatDescriptionHtml(rawDescription);
+        const cleanPlainText = rawDescription.replace(/<[^>]+>/g, '').trim();
+        const controls = this.findDescriptionControls(doc);
+
+        if (controls.toggleEditorBtn) {
+          log?.(`Found Toggle Editor control: "${Utils.cleanText(controls.toggleEditorBtn.textContent || 'Toggle Editor')}"`);
+          const needsToggle = (!controls.iframe && !controls.contentEditable && (!window.tinymce || !window.tinymce.get('description')));
+          if (needsToggle) {
+            log?.('Activating Toggle Editor control...');
+            try { controls.toggleEditorBtn.click(); } catch (e) {
+              controls.toggleEditorBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            }
+            await Utils.sleep(400);
+          }
+        }
+
+        let insertedIntoRichText = false;
+        try {
+          const win = doc.defaultView || window;
+          if (win.tinymce && typeof win.tinymce.get === 'function') {
+            const editor = win.tinymce.get('description') || win.tinymce.get('target_description') || win.tinymce.activeEditor;
+            if (editor) {
+              editor.setContent(htmlContent);
+              editor.save();
+              insertedIntoRichText = true;
+              log?.('Inserted formatted HTML via TinyMCE editor instance.');
+            }
+          }
+        } catch (e) {}
+
+        try {
+          const win = doc.defaultView || window;
+          if (win.Joomla?.editors?.instances?.description) {
+            win.Joomla.editors.instances.description.setValue(htmlContent);
+            insertedIntoRichText = true;
+            log?.('Inserted formatted HTML via Joomla.editors instance.');
+          }
+        } catch (e) {}
+
+        try {
+          const refreshedControls = this.findDescriptionControls(doc);
+          const iframe = refreshedControls.iframe;
+          if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+            iframe.contentDocument.body.innerHTML = htmlContent;
+            iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true }));
+            iframe.contentDocument.body.dispatchEvent(new Event('change', { bubbles: true }));
+            insertedIntoRichText = true;
+            log?.('Inserted formatted HTML into description iframe body.');
+          }
+        } catch (e) {}
+
+        try {
+          const refreshedControls = this.findDescriptionControls(doc);
+          const ce = refreshedControls.contentEditable;
+          if (ce) {
+            ce.innerHTML = htmlContent;
+            ce.dispatchEvent(new Event('input', { bubbles: true }));
+            ce.dispatchEvent(new Event('change', { bubbles: true }));
+            insertedIntoRichText = true;
+            log?.('Inserted formatted HTML into contenteditable container.');
+          }
+        } catch (e) {}
+
+        const textarea = this.findDescriptionControls(doc).textarea;
+        if (textarea) {
+          textarea.value = cleanPlainText;
+          Utils.triggerEvents(textarea);
+          log?.('Updated description textarea with clean paragraphs.');
+        }
+
+        return (insertedIntoRichText || textarea) ? { success: true } : { success: false, error: 'Editor not found' };
+      }
+    };
+
+    return {
+      version: '2.3.0-DICE2',
+      async runDryRun(targetDoc, extractedFields = {}, options = {}) {
+        if (!targetDoc) targetDoc = document;
+        const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
+        log(`🔍 [DICE DRY-RUN] Starting inspection on document: "${targetDoc.title || 'Untitled'}"...`);
+
+        const checks = {
+          diceForm: !!targetDoc.querySelector('form, #adminForm, #legacy-vehicle-form, .form-validate'),
+          category: { found: false, control: null, optionFound: false, targetOption: 'Vehicles' },
+          subCategory: { found: false, control: null, optionFound: false, targetOption: 'Car - parts' },
+          thirdLevelCategory: { found: false, control: null, optionFound: false, targetOption: 'Used cars in South Africa' },
+          priceInput: { found: false, element: null, wouldFill: extractedFields.price || '(extracted price)' },
+          priceCurrency: { found: false, control: null, optionFound: false, targetOption: 'R (Rand)' },
+          tagDropdown: { found: false, control: null, optionFound: false, targetOption: 'Sale' },
+          locationDropdown: { found: false, control: null, optionFound: false, targetOption: 'South Africa' },
+          toggleEditor: { found: false, element: null },
+          descriptionEditor: { found: false, details: null },
+          vehicleFields: { totalFound: 0, expected: 18, details: {} }
+        };
+
+        const catCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name*="cat"]'],
+          labels: [/^category\s*\*?$/i, /\bcategory\b/i],
+          names: ['category', 'target_category', 'parent_id', 'catid']
+        });
+        if (catCtrl) {
+          checks.category.found = true;
+          checks.category.control = catCtrl.id || catCtrl.name || catCtrl.tagName;
+          const match = DropdownManager.getOptions(catCtrl).find(o => /vehicles/i.test(o.text) || /vehicles/i.test(o.value));
+          checks.category.optionFound = !!match;
+          log(`✓ Category dropdown found (id: "${checks.category.control}"). "Vehicles": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const subCatCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2'],
+          labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
+          names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2']
+        });
+        if (subCatCtrl) {
+          checks.subCategory.found = true;
+          checks.subCategory.control = subCatCtrl.id || subCatCtrl.name || subCatCtrl.tagName;
+          const match = DropdownManager.getOptions(subCatCtrl).find(o => /car\s*-\s*parts/i.test(o.text) || /car\s*-\s*parts/i.test(o.value));
+          checks.subCategory.optionFound = !!match;
+          log(`✓ Sub Category dropdown found. "Car - parts": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const thirdCatCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3'],
+          labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i],
+          names: ['third_category', 'target_used_cars_sa', 'cat_id_3']
+        });
+        if (thirdCatCtrl) {
+          checks.thirdLevelCategory.found = true;
+          checks.thirdLevelCategory.control = thirdCatCtrl.id || thirdCatCtrl.name || thirdCatCtrl.tagName;
+          const match = DropdownManager.getOptions(thirdCatCtrl).find(o => /used\s*cars\s*in\s*south\s*africa/i.test(o.text) || /all\s*south\s*africa/i.test(o.text));
+          checks.thirdLevelCategory.optionFound = !!match;
+          log(`✓ 3rd-level Category dropdown found. "Used cars in South Africa": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
+        if (priceInp) {
+          checks.priceInput.found = true;
+          checks.priceInput.element = priceInp.id || priceInp.name;
+        }
+
+        let priceCurrCtrl = priceInp ? (priceInp.closest('.control-group, .form-group, .demo-form-group, tr, td, div')?.querySelector('select')) : null;
+        if (!priceCurrCtrl) {
+          priceCurrCtrl = DropdownManager.findDropdown(targetDoc, {
+            selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
+            labels: [/^currency\s*\*?$/i, /price\s*currency/i],
+            names: ['currency', 'target_currency']
+          });
+        }
+        if (priceCurrCtrl) {
+          checks.priceCurrency.found = true;
+          checks.priceCurrency.control = priceCurrCtrl.id || priceCurrCtrl.name || priceCurrCtrl.tagName;
+          const match = DropdownManager.getOptions(priceCurrCtrl).find(o => /\br\b|\brand\b|zar/i.test(o.text) || /\br\b|\brand\b|zar/i.test(o.value));
+          checks.priceCurrency.optionFound = !!match;
+          log(`✓ Price currency dropdown found. "R (Rand)": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const tagCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_tags', '#target_tag', '#tags', '#tag', 'select[name="tags"]', 'select[name="tag"]', 'select[name*="tag"]'],
+          labels: [/^tags?\s*(?:dropdown)?\s*\*?$/i, /\btag\b/i],
+          names: ['tags', 'tag', 'target_tags']
+        });
+        if (tagCtrl) {
+          checks.tagDropdown.found = true;
+          checks.tagDropdown.control = tagCtrl.id || tagCtrl.name || tagCtrl.tagName;
+          const match = DropdownManager.getOptions(tagCtrl).find(o => /sale/i.test(o.text) || /sale/i.test(o.value));
+          checks.tagDropdown.optionFound = !!match;
+          log(`✓ Tag dropdown found. "Sale": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const locCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_country', '#target_location', '#country', '#location', 'select[name="location"]', 'select[name="country"]', 'select[name*="location"]', 'select[name*="country"]'],
+          labels: [/^location\s*(?:dropdown)?\s*\*?$/i, /^country\s*(?:\/\s*location)?\s*\*?$/i, /\blocation\b/i],
+          names: ['country', 'location', 'target_country', 'target_location']
+        });
+        if (locCtrl) {
+          checks.locationDropdown.found = true;
+          checks.locationDropdown.control = locCtrl.id || locCtrl.name || locCtrl.tagName;
+          const match = DropdownManager.getOptions(locCtrl).find(o => /south\s*africa/i.test(o.text) || /south\s*africa/i.test(o.value));
+          checks.locationDropdown.optionFound = !!match;
+          log(`✓ Location dropdown found. "South Africa": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+        }
+
+        const descControls = DescriptionManager.findDescriptionControls(targetDoc);
+        checks.toggleEditor.found = !!descControls.toggleEditorBtn;
+        checks.descriptionEditor.found = !!(descControls.textarea || descControls.iframe || descControls.contentEditable);
+        log(`✓ Description Toggle Editor: ${checks.toggleEditor.found ? 'FOUND ✓' : 'NOT FOUND (Visible editor detected)'}`);
+
+        log('✓ Dry-run completed with 0 form modifications.');
+        return { success: true, isDryRun: true, checks };
+      },
+
+      async fillForm(targetDoc, extractedData, options = {}) {
+        if (!targetDoc) targetDoc = document;
+        if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
+        const fields = extractedData.fields || extractedData.normalized || extractedData;
+        const stepDelayMs = options.stepDelayMs || 300;
+        const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
+
+        log(`🚀 [DICE AUTO-FILL] Beginning automated form population for: "${fields.title || 'Vehicle Listing'}"...`);
+
+        // 1. Category -> Vehicles
+        const catCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name*="cat"]'],
+          labels: [/^category\s*\*?$/i, /\bcategory\b/i],
+          names: ['category', 'target_category', 'parent_id', 'catid']
+        });
+        if (catCtrl) {
+          const selRes = DropdownManager.selectOption(catCtrl, 'Vehicles');
+          if (selRes.success) log(`✓ Selected Category → "${selRes.selectedText}"`);
+        }
+        await Utils.sleep(stepDelayMs);
+
+        // 2. Sub Category -> Car - parts
+        const subCatCtrl = await Utils.waitFor(() => DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2'],
+          labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
+          names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2']
+        }), 6000, 150);
+        if (subCatCtrl) {
+          const selRes = DropdownManager.selectOption(subCatCtrl, 'Car - parts') || DropdownManager.selectOption(subCatCtrl, 'Cars');
+          if (selRes.success) log(`✓ Selected Sub Category → "${selRes.selectedText}"`);
+        }
+        await Utils.sleep(stepDelayMs);
+
+        // 3. Third-level Category -> Used cars in South Africa
+        const thirdCatCtrl = await Utils.waitFor(() => DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3'],
+          labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i],
+          names: ['third_category', 'target_used_cars_sa', 'cat_id_3']
+        }), 6000, 150);
+        if (thirdCatCtrl) {
+          const selRes = DropdownManager.selectOption(thirdCatCtrl, 'Used cars in South Africa') || DropdownManager.selectOption(thirdCatCtrl, 'All South Africa');
+          if (selRes.success) log(`✓ Selected Third-level Category → "${selRes.selectedText}"`);
+        }
+        await Utils.sleep(stepDelayMs);
+
+        // 4. Populate Vehicle Fields
+        SmartPasteEngine.fillTargetForm(targetDoc, fields);
+        log('✓ Applied vehicle field mapping.');
+
+        // 5. Price row & Currency -> R (Rand)
+        const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
+        if (priceInp && fields.price) {
+          const digitsOnly = String(fields.price).replace(/[^\d]/g, '');
+          if (digitsOnly) {
+            priceInp.value = digitsOnly;
+            Utils.triggerEvents(priceInp);
+            log(`✓ Set Price: "${digitsOnly}"`);
+          }
+        }
+        let priceCurrCtrl = priceInp ? (priceInp.closest('.control-group, .form-group, .demo-form-group, tr, td, div')?.querySelector('select')) : null;
+        if (!priceCurrCtrl) {
+          priceCurrCtrl = DropdownManager.findDropdown(targetDoc, {
+            selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
+            labels: [/^currency\s*\*?$/i, /price\s*currency/i],
+            names: ['currency', 'target_currency']
+          });
+        }
+        if (priceCurrCtrl) {
+          const selRes = DropdownManager.selectOption(priceCurrCtrl, 'R (Rand)') || DropdownManager.selectOption(priceCurrCtrl, 'ZAR') || DropdownManager.selectOption(priceCurrCtrl, 'R');
+          if (selRes.success) log(`✓ Selected Price Currency → "${selRes.selectedText}"`);
+        }
+
+        // 6. Tag -> Sale
+        const tagCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_tags', '#target_tag', '#tags', '#tag', 'select[name="tags"]', 'select[name="tag"]', 'select[name*="tag"]'],
+          labels: [/^tags?\s*(?:dropdown)?\s*\*?$/i, /\btag\b/i],
+          names: ['tags', 'tag', 'target_tags']
+        });
+        if (tagCtrl) {
+          const selRes = DropdownManager.selectOption(tagCtrl, 'Sale');
+          if (selRes.success) log(`✓ Selected Tag → "${selRes.selectedText}"`);
+        }
+
+        // 7. Location -> South Africa
+        const locCtrl = DropdownManager.findDropdown(targetDoc, {
+          selectors: ['#target_country', '#target_location', '#country', '#location', 'select[name="location"]', 'select[name="country"]', 'select[name*="location"]', 'select[name*="country"]'],
+          labels: [/^location\s*(?:dropdown)?\s*\*?$/i, /^country\s*(?:\/\s*location)?\s*\*?$/i, /\blocation\b/i],
+          names: ['country', 'location', 'target_country', 'target_location']
+        });
+        if (locCtrl) {
+          const selRes = DropdownManager.selectOption(locCtrl, 'South Africa');
+          if (selRes.success) log(`✓ Selected Location → "${selRes.selectedText}"`);
+        }
+
+        // 8. Description with Toggle Editor
+        if (fields.description) {
+          await DescriptionManager.ensureAndFillDescription(targetDoc, fields.description, log);
+        }
+
+        await Utils.sleep(stepDelayMs);
+        log('\n==================================================');
+        log('✓ Auto-fill completed');
+        log('Please review the form before manually submitting.');
+        log('==================================================');
+
+        this.renderCompletionBanner(targetDoc);
+        return { success: true };
+      },
+
+      renderCompletionBanner(targetDoc) {
+        if (!targetDoc || !targetDoc.body) return;
+        try {
+          const existing = targetDoc.getElementById('dice-autofill-banner');
+          if (existing) existing.remove();
+          const banner = targetDoc.createElement('div');
+          banner.id = 'dice-autofill-banner';
+          banner.style.cssText = 'position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#0f172a; color:#f8fafc; padding:12px 20px; border-radius:8px; border-left:5px solid #22c55e; box-shadow:0 10px 25px rgba(0,0,0,0.35); z-index:99999999; font-family:sans-serif; font-size:13px; display:flex; align-items:center; gap:12px;';
+          banner.innerHTML = '<div style="font-size:18px;">✅</div><div><div style="font-weight:700; color:#4ade80; font-size:14px;">✓ Auto-fill completed</div><div style="color:#94a3b8; font-size:12px;">Please review the form before manually submitting.</div></div><button id="dice-banner-close" style="background:transparent; border:none; color:#64748b; font-size:16px; cursor:pointer; padding:2px 6px; margin-left:8px;">✕</button>';
+          targetDoc.body.appendChild(banner);
+          banner.querySelector('#dice-banner-close').onclick = () => banner.remove();
+          setTimeout(() => { if (banner.parentElement) banner.remove(); }, 12000);
+        } catch (e) {}
+      }
+    };
+  })();
+
+  // --- 7. DICE TAB CROSS-TAB LISTENER ---
+  const DiceTabListener = {
+    processedJobIds: new Set(),
+    statusBarEl: null,
+
+    init() {
+      // 1. Listen for live events via GM_addValueChangeListener
+      if (typeof GM_addValueChangeListener === 'function') {
+        GM_addValueChangeListener('DICE_PENDING_JOB', (name, oldValue, newValue, remote) => {
+          if (newValue) {
+            this.handleJob(newValue, true);
+          }
+        });
+      }
+
+      // 2. Storage event listener fallback
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'DICE_PENDING_JOB' && e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            this.handleJob(parsed, true);
+          } catch (err) {}
+        }
+      });
+
+      // 3. Cold-start check on page load
+      this.checkPendingColdStart();
+    },
+
+    checkPendingColdStart() {
+      let pendingJob = null;
+      if (typeof GM_getValue === 'function') {
+        pendingJob = GM_getValue('DICE_PENDING_JOB');
+      }
+      if (!pendingJob) {
+        try {
+          const stored = localStorage.getItem('DICE_PENDING_JOB');
+          if (stored) pendingJob = JSON.parse(stored);
+        } catch (e) {}
+      }
+
+      if (pendingJob && pendingJob.jobId && !this.processedJobIds.has(pendingJob.jobId)) {
+        const ageMs = Date.now() - (pendingJob.timestamp || 0);
+        if (ageMs < 600000) { // Within 10 minutes
+          this.renderPendingWidget(pendingJob);
+        }
+      }
+    },
+
+    handleJob(job, isLiveEvent = false) {
+      if (!job || !job.jobId) return;
+      if (this.processedJobIds.has(job.jobId)) return;
+
+      const ageMs = Date.now() - (job.timestamp || 0);
+      if (ageMs > 600000) return; // Ignore jobs older than 10 mins
+
+      this.processedJobIds.add(job.jobId);
+
+      this.renderPendingWidget(job);
+
+      if (isLiveEvent) {
+        if (job.action === 'dryrun') {
+          DiceAutomator.runDryRun(document, job.fields || {}, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+        } else {
+          DiceAutomator.fillForm(document, job, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+        }
+      }
+    },
+
+    renderPendingWidget(job) {
+      if (this.statusBarEl) this.statusBarEl.remove();
+
+      const title = job.fields?.title || 'Vehicle Listing';
+      const price = job.fields?.price ? `R ${job.fields.price}` : '';
+
+      const widget = document.createElement('div');
+      widget.id = 'dice-floating-automation-bar';
+      widget.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 320px;
+        background: #0f172a;
+        color: #f8fafc;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+        border: 1px solid #334155;
+        z-index: 9999999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 12px;
+        overflow: hidden;
+      `;
+
+      widget.innerHTML = `
+        <div style="background: #1e293b; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155;">
+          <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8;">
+            <span>🚗</span> DICE Form Automator
+          </div>
+          <button id="dice-bar-close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px;">✕</button>
+        </div>
+        <div style="padding: 10px 12px;">
+          <div style="color: #4ade80; font-weight: 700; margin-bottom: 4px;">Vehicle data received ✓</div>
+          <div style="font-weight: 600; color: #f8fafc; word-break: break-word;">${title}</div>
+          ${price ? `<div style="color: #94a3b8; font-size: 11px;">Price: ${price}</div>` : ''}
+          <div id="dice-bar-log" style="margin-top: 8px; max-height: 80px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none;"></div>
+          <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; flex: 2;">
+              ⚡ Run Auto-Fill
+            </button>
+            <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 8px; border-radius: 4px; font-weight: 700; font-size: 10.5px; cursor: pointer; flex: 1;">
+              🧪 Dry-Run
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(widget);
+      this.statusBarEl = widget;
+
+      widget.querySelector('#dice-bar-close').onclick = () => widget.remove();
+      widget.querySelector('#dice-bar-run-autofill').onclick = () => {
+        this.logToWidget('Starting auto-fill sequence...');
+        DiceAutomator.fillForm(document, job, {
+          logCallback: (m) => this.logToWidget(m)
+        });
+      };
+      widget.querySelector('#dice-bar-run-dryrun').onclick = () => {
+        this.logToWidget('Starting dry-run inspection...');
+        DiceAutomator.runDryRun(document, job.fields || {}, {
+          logCallback: (m) => this.logToWidget(m)
+        });
+      };
+    },
+
+    logToWidget(msg) {
+      if (!this.statusBarEl) return;
+      const logEl = this.statusBarEl.querySelector('#dice-bar-log');
+      if (logEl) {
+        logEl.style.display = 'block';
+        logEl.textContent += (logEl.textContent ? '\n' : '') + msg;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    }
+  };
+
+  // Expose engines for test harnesses & browser global scope
   if (typeof window !== 'undefined') {
     window.CarSmartPasteEngine = SmartPasteEngine;
     window.CarsCoZaAdapter = CarsCoZaAdapter;
@@ -2930,6 +3616,8 @@
     window.CarDataHelperValidators = Validators;
     window.CarDataHelperClipboard = { copyToClipboard, formatDescriptionHtml };
     window.CarDataHelperAutoReveal = autoRevealShowNumber;
+    window.DiceAutomator = DiceAutomator;
+    window.DiceTabListener = DiceTabListener;
     window.CarDataHelperUI = {
       createHelperPanel,
       closeHelperPanel,
@@ -2952,6 +3640,15 @@
       });
     } else {
       setTimeout(createHelperPanel, 300);
+    }
+  } else {
+    // We are on a DICE form / target page
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        DiceTabListener.init();
+      });
+    } else {
+      DiceTabListener.init();
     }
   }
 })();

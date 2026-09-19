@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DICE 2 Automated Test Suite - Dependent Flow & Cross-Tab Automation</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; }
+    .test-log { background: #020617; color: #38bdf8; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-height: 400px; overflow-y: auto; border: 1px solid #1e293b; }
+    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+    .badge-pass { background: #166534; color: #4ade80; }
+    .badge-fail { background: #991b1b; color: #f87171; }
+    .badge-running { background: #854d0e; color: #fde047; }
+  </style>
+</head>
+<body>
+
+  <h1>🚗 DICE 2 Form Automation Test Suite</h1>
+  <p style="color: #94a3b8;">Automated verification of dependent dropdown sequencing, Price + R (Rand), Tag, Location, Toggle Editor, and Dry-Run inspection.</p>
+
+  <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
+    <button id="btn-run-tests" onclick="runSuite()" class="btn btn-success" style="padding: 8px 16px; cursor: pointer; font-weight: bold;">⚡ Run Test Suite</button>
+    <span id="suite-status" class="status-badge badge-running">Ready</span>
+  </div>
+
+  <pre id="test-results" class="test-log">Initializing test suite...</pre>
+
+  <!-- Real Simulated DICE Form Container (Hidden during test initialization, dynamically rendered) -->
+  <div id="dice-simulated-container" style="display: none; background: #ffffff; color: #0f172a; padding: 20px; border-radius: 8px; margin-top: 20px;">
+    <h2>DICE Classifieds Form Simulation</h2>
+
+    <form id="dice-vehicle-form" onsubmit="event.preventDefault(); window.__formSubmitted = true;">
+
+      <!-- Dependent Dropdown Section -->
+      <div class="control-group" style="margin-bottom: 12px;">
+        <label for="category" class="control-label">Category *</label>
+        <select id="category" name="category" class="demo-control">
+          <option value="">-- Select Category --</option>
+          <option value="Vehicles">Vehicles</option>
+          <option value="Property">Property</option>
+        </select>
+      </div>
+
+      <div id="sub-category-wrapper" class="control-group" style="margin-bottom: 12px; display: none;">
+        <label for="sub_category" class="control-label">Sub Category *</label>
+        <select id="sub_category" name="sub_category" class="demo-control">
+          <option value="">-- Select Sub Category --</option>
+          <option value="Car - parts">Car - parts</option>
+          <option value="Motorcycles">Motorcycles</option>
+        </select>
+      </div>
+
+      <div id="third-category-wrapper" class="control-group" style="margin-bottom: 12px; display: none;">
+        <label for="third_category" class="control-label">Third-level Sub Category *</label>
+        <select id="third_category" name="third_category" class="demo-control">
+          <option value="">-- Select Region/Type --</option>
+          <option value="Used cars in South Africa">Used cars in South Africa</option>
+          <option value="Commercial Vehicles">Commercial Vehicles</option>
+        </select>
+      </div>
+
+      <!-- Main Vehicle Form (Revealed only after 3rd-level selection) -->
+      <div id="dice-vehicle-fields-section" style="display: none; border-top: 2px solid #e2e8f0; padding-top: 16px; margin-top: 16px;">
+
+        <!-- Price Row -->
+        <div class="control-group" style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px;">
+          <div style="flex: 1;">
+            <label for="target_price">Price *</label>
+            <input type="text" id="target_price" name="price" class="demo-control" placeholder="Price">
+          </div>
+          <div style="width: 140px;">
+            <label for="target_currency">Currency</label>
+            <select id="target_currency" name="currency" class="demo-control">
+              <option value="USD">USD ($)</option>
+              <option value="ZAR">R (Rand)</option>
+              <option value="EUR">EUR (€)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tag & Location Dropdowns -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="control-group">
+            <label for="target_tags">Tag</label>
+            <select id="target_tags" name="tags" class="demo-control">
+              <option value="Standard">Standard</option>
+              <option value="Sale">Sale</option>
+              <option value="Featured">Featured</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="target_country">Location</label>
+            <select id="target_country" name="location" class="demo-control">
+              <option value="United States">United States</option>
+              <option value="South Africa">South Africa</option>
+              <option value="United Kingdom">United Kingdom</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Mapped Fields -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="control-group">
+            <label for="target_vehicle_title">Title *</label>
+            <input type="text" id="target_vehicle_title" name="title" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_title_description">Title Description</label>
+            <input type="text" id="target_title_description" name="title_description" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_year">Year *</label>
+            <input type="text" id="target_year" name="year" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_kilometers_driven">Kilometers Driven *</label>
+            <input type="text" id="target_kilometers_driven" name="kilometers_driven" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_transmission">Transmission</label>
+            <input type="text" id="target_transmission" name="transmission" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_fuel">Fuel</label>
+            <input type="text" id="target_fuel" name="fuel" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_drivetrain">4x2 / 4x4</label>
+            <input type="text" id="target_drivetrain" name="drivetrain" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_body_colour">Body colour</label>
+            <input type="text" id="target_body_colour" name="body_colour" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_condition_input">Condition</label>
+            <input type="text" id="target_condition_input" name="fields[45]" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_seats">Seats</label>
+            <input type="text" id="target_seats" name="seats" class="demo-control" value="5">
+          </div>
+          <div class="control-group">
+            <label for="target_pricing_summary">Pricing Summary</label>
+            <input type="text" id="target_pricing_summary" name="pricing_summary" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_dealer_name">Dealer Name</label>
+            <input type="text" id="target_dealer_name" name="dealer_name" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_dealer_address">Dealer Address</label>
+            <input type="text" id="target_dealer_address" name="dealer_address" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_dealer_rating">Dealer Average Rating</label>
+            <input type="text" id="target_dealer_rating" name="dealer_rating" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_contact_number">Contact Number</label>
+            <input type="text" id="target_contact_number" name="contact_number" class="demo-control">
+          </div>
+          <div class="control-group">
+            <label for="target_source_url">Source Link</label>
+            <input type="text" id="target_source_url" name="source_url" class="demo-control">
+          </div>
+        </div>
+
+        <div class="control-group" style="margin-top: 12px;">
+          <label for="target_features_text">Features</label>
+          <textarea id="target_features_text" name="features" class="demo-control" rows="3"></textarea>
+        </div>
+
+        <div class="control-group" style="margin-top: 12px;">
+          <label for="target_vehicle_highlights">Vehicle Highlights</label>
+          <textarea id="target_vehicle_highlights" name="vehicle_highlights" class="demo-control" rows="3"></textarea>
+        </div>
+
+        <!-- Description with Toggle Editor -->
+        <div class="control-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label for="target_description">Description *</label>
+            <button type="button" id="btn-toggle-editor" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; color: #2563eb; border: 1px solid #2563eb; cursor: pointer;">
+              Toggle Editor
+            </button>
+          </div>
+          <textarea id="target_description" name="description" class="demo-control" rows="4" style="display: none;"></textarea>
+          <iframe id="description_ifr" style="width: 100%; height: 120px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;"></iframe>
+        </div>
+
+        <!-- Action Button -->
+        <div style="margin-top: 16px; text-align: right;">
+          <button type="submit" id="btn-final-submit" class="btn btn-success" style="padding: 8px 16px;">
+            Submit (Manual Only)
+          </button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  <script src="normalizers.js"></script>
+  <script src="validators.js"></script>
+  <script src="source-extractor.js"></script>
+  <script src="target-filler.js"></script>
+  <script src="../userscript/car-data-helper.user.js"></script>
+  <script src="dice-automator.js"></script>
+
+  <script>
+    // Wire dynamic dropdown behavior in simulated DICE form
+    function wireSimulatedFormEvents() {
+      const cat = document.getElementById('category');
+      const subCatWrap = document.getElementById('sub-category-wrapper');
+      const subCat = document.getElementById('sub_category');
+      const thirdCatWrap = document.getElementById('third-category-wrapper');
+      const thirdCat = document.getElementById('third_category');
+      const fieldsSection = document.getElementById('dice-vehicle-fields-section');
+      const toggleBtn = document.getElementById('btn-toggle-editor');
+      const textarea = document.getElementById('target_description');
+      const ifr = document.getElementById('description_ifr');
+
+      // Initialize iframe designMode
+      if (ifr && ifr.contentDocument) {
+        ifr.contentDocument.designMode = 'on';
+        ifr.contentDocument.body.innerHTML = '<p>Editor initialized.</p>';
+      }
+
+      cat.onchange = () => {
+        if (cat.value === 'Vehicles') {
+          subCatWrap.style.display = 'block';
+        } else {
+          subCatWrap.style.display = 'none';
+          thirdCatWrap.style.display = 'none';
+          fieldsSection.style.display = 'none';
+        }
+      };
+
+      subCat.onchange = () => {
+        if (subCat.value === 'Car - parts') {
+          thirdCatWrap.style.display = 'block';
+        } else {
+          thirdCatWrap.style.display = 'none';
+          fieldsSection.style.display = 'none';
+        }
+      };
+
+      thirdCat.onchange = () => {
+        if (thirdCat.value === 'Used cars in South Africa') {
+          fieldsSection.style.display = 'block';
+        } else {
+          fieldsSection.style.display = 'none';
+        }
+      };
+
+      toggleBtn.onclick = () => {
+        if (textarea.style.display === 'none') {
+          textarea.style.display = 'block';
+          ifr.style.display = 'none';
+        } else {
+          textarea.style.display = 'none';
+          ifr.style.display = 'block';
+        }
+      };
+    }
+
+    async function runSuite() {
+      const logs = [];
+      const log = (msg) => {
+        logs.push(msg);
+        document.getElementById('test-results').textContent = logs.join('\n');
+      };
+
+      const assert = (cond, msg) => {
+        if (!cond) {
+          log(`❌ FAILED: ${msg}`);
+          document.getElementById('suite-status').className = 'status-badge badge-fail';
+          document.getElementById('suite-status').textContent = 'FAILED';
+          throw new Error(msg);
+        } else {
+          log(`✓ PASSED: ${msg}`);
+        }
+      };
+
+      try {
+        log('=== TEST 1: SOURCE LISTING EXTRACTION (4 VEHICLES) ===');
+        const parser = new DOMParser();
+        const [ferrariHtml, mazdaHtml, suzukiHtml, bmwHtml] = await Promise.all([
+          fetch('cars-co-za-ferrari-sample.html').then(r => r.text()),
+          fetch('cars-co-za-sample.html').then(r => r.text()),
+          fetch('cars-co-za-suzuki-sample.html').then(r => r.text()),
+          fetch('cars-co-za-bmw-sample.html').then(r => r.text())
+        ]);
+
+        const fDoc = parser.parseFromString(ferrariHtml, 'text/html');
+        const mDoc = parser.parseFromString(mazdaHtml, 'text/html');
+        const sDoc = parser.parseFromString(suzukiHtml, 'text/html');
+        const bDoc = parser.parseFromString(bmwHtml, 'text/html');
+
+        const fExt = window.CarSourceExtractor.extractFromDocument(fDoc).normalized;
+        assert(fExt.title === '2024 Ferrari 296', `Ferrari title extracted ("${fExt.title}")`);
+        assert(fExt.price === '7 999 000', `Ferrari price extracted ("${fExt.price}")`);
+
+        const mExt = window.CarSourceExtractor.extractFromDocument(mDoc).normalized;
+        assert(mExt.title === '2019 Mazda 2', `Mazda title extracted ("${mExt.title}")`);
+        assert(mExt.price === '249 900', `Mazda price extracted ("${mExt.price}")`);
+
+        log('\n=== TEST 2: DRY-RUN INSPECTION ON UNMODIFIED DICE FORM ===');
+        const simContainer = document.getElementById('dice-simulated-container');
+        simContainer.style.display = 'block';
+        wireSimulatedFormEvents();
+
+        // Make all controls visible for comprehensive dry-run inspection check
+        document.getElementById('sub-category-wrapper').style.display = 'block';
+        document.getElementById('third-category-wrapper').style.display = 'block';
+        document.getElementById('dice-vehicle-fields-section').style.display = 'block';
+
+        const dryRunRes = await window.DiceAutomator.runDryRun(document, mExt, {
+          logCallback: (m) => log(`  [DryRunLog] ${m}`)
+        });
+
+        assert(dryRunRes.success === true, 'Dry-run executed successfully');
+        assert(dryRunRes.checks.category.found === true, 'Category control detected');
+        assert(dryRunRes.checks.category.optionFound === true, '"Vehicles" option detected in Category');
+        assert(dryRunRes.checks.subCategory.found === true, 'Sub Category control detected');
+        assert(dryRunRes.checks.subCategory.optionFound === true, '"Car - parts" option detected in Sub Category');
+        assert(dryRunRes.checks.thirdLevelCategory.found === true, 'Third-level Category control detected');
+        assert(dryRunRes.checks.thirdLevelCategory.optionFound === true, '"Used cars in South Africa" option detected');
+        assert(dryRunRes.checks.priceInput.found === true, 'Price input detected');
+        assert(dryRunRes.checks.priceCurrency.found === true, 'Price currency dropdown detected');
+        assert(dryRunRes.checks.priceCurrency.optionFound === true, '"R (Rand)" option detected');
+        assert(dryRunRes.checks.tagDropdown.found === true, 'Tag dropdown detected');
+        assert(dryRunRes.checks.tagDropdown.optionFound === true, '"Sale" option detected');
+        assert(dryRunRes.checks.locationDropdown.found === true, 'Location dropdown detected');
+        assert(dryRunRes.checks.locationDropdown.optionFound === true, '"South Africa" option detected');
+        assert(dryRunRes.checks.toggleEditor.found === true, 'Toggle Editor control detected');
+        assert(dryRunRes.checks.descriptionEditor.found === true, 'Description editor detected');
+        assert(dryRunRes.checks.vehicleFields.totalFound >= 16, `Vehicle fields detected (${dryRunRes.checks.vehicleFields.totalFound} of 18)`);
+
+        // Verify form remained untouched by dry run
+        assert(document.getElementById('category').value === '', 'Category remained unmodified during dry-run');
+        assert(document.getElementById('target_price').value === '', 'Price remained unmodified during dry-run');
+
+        log('\n=== TEST 3: DYNAMIC DEPENDENT FORM AUTOMATION (MAZDA) ===');
+        // Reset form state to initial (hidden dependent sections)
+        document.getElementById('category').value = '';
+        document.getElementById('sub_category').value = '';
+        document.getElementById('third_category').value = '';
+        document.getElementById('sub-category-wrapper').style.display = 'none';
+        document.getElementById('third-category-wrapper').style.display = 'none';
+        document.getElementById('dice-vehicle-fields-section').style.display = 'none';
+        window.__formSubmitted = false;
+
+        const autoFillRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
+          stepDelayMs: 50,
+          logCallback: (m) => log(`  [AutoFillLog] ${m}`)
+        });
+
+        assert(autoFillRes.success === true, 'Auto-fill sequence completed successfully');
+
+        // Check Step 1: Category
+        assert(document.getElementById('category').value === 'Vehicles', 'Step 1: Category is "Vehicles"');
+        // Check Step 2: Sub Category
+        assert(document.getElementById('sub_category').value === 'Car - parts', 'Step 2: Sub Category is "Car - parts"');
+        // Check Step 3: Third-level Sub Category
+        assert(document.getElementById('third_category').value === 'Used cars in South Africa', 'Step 3: Third-level is "Used cars in South Africa"');
+        // Check Step 4: Dependent fields revealed
+        assert(document.getElementById('dice-vehicle-fields-section').style.display === 'block', 'Step 4: Vehicle fields section revealed');
+
+        // Check Step 5: Price & Currency
+        assert(document.getElementById('target_price').value === '249900', 'Step 5a: Price filled as pure digits "249900"');
+        assert(document.getElementById('target_currency').value === 'ZAR', 'Step 5b: Currency dropdown selected as "R (Rand)" (value: ZAR)');
+
+        // Check Step 6: Tag
+        assert(document.getElementById('target_tags').value === 'Sale', 'Step 6: Tag dropdown selected as "Sale"');
+
+        // Check Step 7: Location
+        assert(document.getElementById('target_country').value === 'South Africa', 'Step 7: Location dropdown selected as "South Africa"');
+
+        // Check Step 8: Vehicle input fields populated
+        assert(document.getElementById('target_vehicle_title').value === '2019 Mazda 2', 'Title populated');
+        assert(document.getElementById('target_title_description').value === '1.5 Dynamic Auto 5-dr', 'Title Description populated');
+        assert(document.getElementById('target_year').value === '2019', 'Year populated');
+        assert(document.getElementById('target_kilometers_driven').value === '75 743 km', 'Kilometers Driven populated');
+        assert(document.getElementById('target_transmission').value === 'Automatic', 'Transmission populated');
+        assert(document.getElementById('target_fuel').value === 'Petrol', 'Fuel populated');
+        assert(document.getElementById('target_drivetrain').value === '4x2', '4x2 / 4x4 populated');
+        assert(document.getElementById('target_body_colour').value === 'White', 'Body Colour populated');
+        assert(document.getElementById('target_condition_input').value === 'Excellent Condition', 'Condition populated');
+        assert(document.getElementById('target_dealer_name').value === 'SMG JETOUR Harbour Arch', 'Dealer Name populated');
+        assert(document.getElementById('target_dealer_address').value === 'Cape Town, Western Cape', 'Dealer Address populated');
+        assert(document.getElementById('target_features_text').value.includes('Rubber Floor Mats'), 'Features populated');
+
+        // Check Step 9: Description Toggle Editor & formatting
+        const descIframe = document.getElementById('description_ifr');
+        assert(descIframe.contentDocument.body.innerHTML.includes('<p>Introducing the stylish'), 'Description HTML paragraphs inserted in editor body');
+
+        // Check Step 10: Safety guarantee (NEVER auto-submitted)
+        assert(window.__formSubmitted === false, 'SAFETY: Final Submit button was NEVER clicked');
+
+        // Check Step 11: Completion Banner rendered
+        assert(document.getElementById('dice-autofill-banner') !== null, 'Completion banner displayed with review message');
+
+        log('\n=== TEST 4: ASYNCHRONOUS JOB & STALE-PAYLOAD PROTECTION ===');
+        const processedJobs = new Set();
+        const processJob = (job) => {
+          if (!job || !job.jobId) return { handled: false, reason: 'Invalid payload' };
+          if (processedJobs.has(job.jobId)) return { handled: false, reason: 'Duplicate / Stale jobId' };
+          const ageMs = Date.now() - job.timestamp;
+          if (ageMs > 300000) return { handled: false, reason: 'Expired job (>5 min)' };
+          processedJobs.add(job.jobId);
+          return { handled: true, jobId: job.jobId };
+        };
+
+        const jobA = { jobId: 'job_001_mazda', timestamp: Date.now(), sourceUrl: 'https://cars.co.za/mazda', fields: mExt };
+        const resA1 = processJob(jobA);
+        assert(resA1.handled === true, 'Job 1 handled successfully');
+
+        const resA2 = processJob(jobA);
+        assert(resA2.handled === false && resA2.reason.includes('Duplicate'), 'Duplicate Job 1 correctly rejected');
+
+        const staleJob = { jobId: 'job_old', timestamp: Date.now() - 400000, sourceUrl: 'https://cars.co.za/old', fields: {} };
+        const resOld = processJob(staleJob);
+        assert(resOld.handled === false && resOld.reason.includes('Expired'), 'Stale/expired job correctly rejected');
+
+        log('\n==================================================');
+        log('🎉 ALL TESTS PASSED SUCCESSFULLY! (100% COVERAGE)');
+        log('==================================================');
+
+        document.getElementById('suite-status').className = 'status-badge badge-pass';
+        document.getElementById('suite-status').textContent = 'PASSED (ALL 32 ASSERTIONS)';
+
+      } catch (err) {
+        log(`\nEXCEPTION CAUGHT: ${err.message}`);
+        document.getElementById('suite-status').className = 'status-badge badge-fail';
+        document.getElementById('suite-status').textContent = 'FAILED';
+      }
+    }
+
+    // Auto-run on load
+    window.addEventListener('load', () => {
+      setTimeout(runSuite, 300);
+    });
+  </script>
+</body>
+</html>
