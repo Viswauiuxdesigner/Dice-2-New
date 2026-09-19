@@ -18,6 +18,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
 // @grant        GM_setClipboard
+// @noframes
 // @run-at       document-end
 // ==UserScript==
 
@@ -3000,6 +3001,28 @@
           .replace(/\s+/g, ' ')
           .trim();
       },
+      getEffectiveDocument(passedDoc) {
+        if (
+          passedDoc &&
+          passedDoc.querySelector &&
+          passedDoc.querySelector('form#adminForm, #category_div, #parent_id_0')
+        ) {
+          return passedDoc;
+        }
+
+        try {
+          if (
+            typeof window !== 'undefined' &&
+            window.top &&
+            window.top.document &&
+            window.top.document.querySelector('form#adminForm, #category_div, #parent_id_0')
+          ) {
+            return window.top.document;
+          }
+        } catch (e) {}
+
+        return passedDoc || (typeof document !== 'undefined' ? document : null);
+      },
       triggerEvents(el) {
         if (!el) return;
         try {
@@ -3634,7 +3657,7 @@
       DescriptionManager,
       Utils,
       async runDryRun(targetDoc, extractedFields = {}, options = {}) {
-        if (!targetDoc) targetDoc = document;
+        targetDoc = Utils.getEffectiveDocument(targetDoc);
         const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
         log(`🔍 [DICE DRY-RUN] Starting diagnostic inspection on document: "${targetDoc.title || 'Untitled'}"...`);
 
@@ -3743,7 +3766,7 @@
        * Purely diagnostic — performs ZERO DOM mutations or dropdown events.
        */
       runCategoryDomDiagnostic(targetDoc, options = {}) {
-        if (!targetDoc) targetDoc = document;
+        targetDoc = Utils.getEffectiveDocument(targetDoc);
         const opts = Object.assign({}, options);
         const log = (msg) => {
           if (typeof opts.logCallback === 'function') opts.logCallback(msg);
@@ -3882,7 +3905,7 @@
       },
 
       async fillForm(targetDoc, extractedData, options = {}) {
-        if (!targetDoc) targetDoc = document;
+        targetDoc = Utils.getEffectiveDocument(targetDoc);
         if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
         const fields = extractedData.fields || extractedData.normalized || extractedData;
         const opts = Object.assign({ stepDelayMs: 300, maxWaitMs: 8000, pollIntervalMs: 150 }, options);
@@ -4240,12 +4263,13 @@
       this.renderPendingWidget(job);
 
       if (isLiveEvent) {
+        const targetDoc = Utils.getEffectiveDocument(document);
         if (job.action === 'dryrun') {
-          await DiceAutomator.runDryRun(document, job.fields || {}, {
+          await DiceAutomator.runDryRun(targetDoc, job.fields || {}, {
             logCallback: (m) => this.logToWidget(m)
           });
         } else {
-          const res = await DiceAutomator.fillForm(document, job, {
+          const res = await DiceAutomator.fillForm(targetDoc, job, {
             logCallback: (m) => this.logToWidget(m)
           });
           this.updateWidgetStatus(res);
@@ -4254,6 +4278,11 @@
     },
 
     renderPendingWidget(job) {
+      if (typeof window !== 'undefined' && window.self !== window.top) {
+        if (!document.querySelector('form#adminForm, #category_div, #parent_id_0')) {
+          return;
+        }
+      }
       if (this.statusBarEl) this.statusBarEl.remove();
 
       const title = job.fields?.title || 'Vehicle Listing';
@@ -4316,14 +4345,16 @@
       widget.querySelector('#dice-bar-close').onclick = () => widget.remove();
       widget.querySelector('#dice-bar-run-autofill').onclick = async () => {
         this.logToWidget('Starting auto-fill sequence...');
-        const res = await DiceAutomator.fillForm(document, job, {
+        const targetDoc = Utils.getEffectiveDocument(document);
+        const res = await DiceAutomator.fillForm(targetDoc, job, {
           logCallback: (m) => this.logToWidget(m)
         });
         this.updateWidgetStatus(res);
       };
       widget.querySelector('#dice-bar-run-dryrun').onclick = async () => {
         this.logToWidget('Starting dry-run inspection...');
-        await DiceAutomator.runDryRun(document, job.fields || {}, {
+        const targetDoc = Utils.getEffectiveDocument(document);
+        await DiceAutomator.runDryRun(targetDoc, job.fields || {}, {
           logCallback: (m) => this.logToWidget(m)
         });
       };
@@ -4333,7 +4364,8 @@
           logEl.style.display = 'block';
           logEl.textContent = '';
         }
-        DiceAutomator.runCategoryDomDiagnostic(document, {
+        const targetDoc = Utils.getEffectiveDocument(document);
+        DiceAutomator.runCategoryDomDiagnostic(targetDoc, {
           logCallback: (m) => this.logToWidget(m)
         });
       };

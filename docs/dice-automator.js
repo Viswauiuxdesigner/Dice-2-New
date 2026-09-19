@@ -49,6 +49,29 @@
         .trim();
     },
 
+    getEffectiveDocument(passedDoc) {
+      if (
+        passedDoc &&
+        passedDoc.querySelector &&
+        passedDoc.querySelector('form#adminForm, #category_div, #parent_id_0')
+      ) {
+        return passedDoc;
+      }
+
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          window.top &&
+          window.top.document &&
+          window.top.document.querySelector('form#adminForm, #category_div, #parent_id_0')
+        ) {
+          return window.top.document;
+        }
+      } catch (e) {}
+
+      return passedDoc || (typeof document !== 'undefined' ? document : null);
+    },
+
     normalizeDescHtml(text) {
       if (!text) return '';
       let clean = String(text)
@@ -855,7 +878,7 @@
      * Inspects the DICE DOM without modifying it (Dry-Run / Diagnostic Mode)
      */
     async runDryRun(targetDoc, extractedFields = {}, options = {}) {
-      if (!targetDoc) targetDoc = document;
+      targetDoc = Utils.getEffectiveDocument(targetDoc);
       const opts = Object.assign({}, DEFAULT_OPTIONS, options);
       const log = (msg) => {
         if (typeof opts.logCallback === 'function') opts.logCallback(msg);
@@ -1046,7 +1069,7 @@
      * Purely diagnostic — performs ZERO DOM mutations or dropdown events.
      */
     runCategoryDomDiagnostic(targetDoc, options = {}) {
-      if (!targetDoc) targetDoc = document;
+      targetDoc = Utils.getEffectiveDocument(targetDoc);
       const opts = Object.assign({}, options);
       const log = (msg) => {
         if (typeof opts.logCallback === 'function') opts.logCallback(msg);
@@ -1188,7 +1211,7 @@
      * Executes the live, non-destructive automatic form-filling sequence with strict verification at every step.
      */
     async fillForm(targetDoc, extractedData, options = {}) {
-      if (!targetDoc) targetDoc = document;
+      targetDoc = Utils.getEffectiveDocument(targetDoc);
       if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
 
       const fields = extractedData.fields || extractedData.normalized || extractedData;
