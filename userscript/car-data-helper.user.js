@@ -2993,14 +2993,26 @@
           el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
         } catch (e) {}
         try {
-          const win = el.ownerDocument?.defaultView || window;
-          const $ = win.$ || win.jQuery;
+          if (typeof el.onchange === 'function') el.onchange();
+        } catch (e) {}
+        try {
+          const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+          const unsafe = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
+          if (typeof win?.getsubcat === 'function') {
+            win.getsubcat(el.value);
+          } else if (typeof unsafe?.getsubcat === 'function') {
+            unsafe.getsubcat(el.value);
+          }
+        } catch (e) {}
+        try {
+          const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+          const $ = win?.$ || win?.jQuery || (typeof unsafeWindow !== 'undefined' ? (unsafeWindow.$ || unsafeWindow.jQuery) : null);
           if ($ && typeof $(el).trigger === 'function') {
             $(el).trigger('input').trigger('change').trigger('chosen:updated').trigger('select2:select');
           }
         } catch (e) {}
       },
-      async waitFor(predicate, maxWaitMs = 6000, pollIntervalMs = 150) {
+      async waitFor(predicate, maxWaitMs = 8000, pollIntervalMs = 150) {
         const startTime = Date.now();
         while (Date.now() - startTime < maxWaitMs) {
           try {
@@ -3014,6 +3026,189 @@
     };
 
     const DropdownManager = {
+      isValidSelectElement(el) {
+        if (!el) return false;
+        const tag = (el.tagName || '').toUpperCase();
+        if (tag === 'SELECT') return true;
+        if (el.classList && (el.classList.contains('chosen-container') || el.classList.contains('select2-container'))) return true;
+        if (el.getAttribute && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
+        return false;
+      },
+
+      getOptions(control) {
+        if (!control) return [];
+        if (control.tagName === 'SELECT') {
+          return Array.from(control.options).map((opt, idx) => ({
+            index: idx,
+            value: opt.value,
+            text: Utils.cleanText(opt.text),
+            element: opt,
+            selected: opt.selected
+          }));
+        }
+        if (control.classList && (control.classList.contains('chosen-container') || control.classList.contains('select2-container'))) {
+          const nativeSelect = control.parentElement?.querySelector('select') || control.previousElementSibling;
+          if (nativeSelect && nativeSelect.tagName === 'SELECT') return this.getOptions(nativeSelect);
+        }
+        const optionEls = control.querySelectorAll ? control.querySelectorAll('[role="option"], li, .dropdown-item, a') : [];
+        return Array.from(optionEls).map((el, idx) => ({
+          index: idx,
+          value: el.getAttribute('data-value') || el.getAttribute('value') || Utils.cleanText(el.textContent),
+          text: Utils.cleanText(el.textContent),
+          element: el,
+          selected: el.classList.contains('active') || el.classList.contains('selected') || el.getAttribute('aria-selected') === 'true'
+        }));
+      },
+
+      matchOption(options, targetMatcher) {
+        if (!options || options.length === 0) return null;
+        if (typeof targetMatcher === 'function') return options.find(targetMatcher) || null;
+        if (targetMatcher instanceof RegExp) {
+          return options.find(o => targetMatcher.test(o.text) || targetMatcher.test(o.value)) || null;
+        }
+        const search = Utils.cleanText(String(targetMatcher)).toLowerCase();
+        let matched = options.find(o => o.text.toLowerCase() === search);
+        if (!matched) matched = options.find(o => o.value.toLowerCase() === search);
+        if (!matched) matched = options.find(o => o.text.toLowerCase().includes(search));
+        if (!matched) matched = options.find(o => search.includes(o.text.toLowerCase()) && o.text.length > 2);
+        if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
+        return matched || null;
+      },
+
+      findDropdownWithOption(doc, targetMatcher, criteria = {}) {
+        if (!doc) doc = document;
+        const candidates = [];
+        if (criteria.selectors) {
+          for (const sel of criteria.selectors) {
+            try {
+              const els = doc.querySelectorAll(sel);
+              els.forEach(el => {
+                if (this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
+              });
+            } catch (e) {}
+          }
+        }
+        if (criteria.labels) {
+          const allLabels = doc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, div.control-label, th');
+          for (const lbl of allLabels) {
+            const lText = Utils.cleanText((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || ''));
+            for (const targetLabel of criteria.labels) {
+              const matches = typeof targetLabel === 'string'
+                ? lText.toLowerCase().includes(targetLabel.toLowerCase())
+                : targetLabel.test(lText);
+              if (matches) {
+                const forId = lbl.getAttribute('for');
+                if (forId) {
+                  const el = doc.getElementById(forId) || doc.querySelector('#' + CSS.escape(forId));
+                  if (el && this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
+                }
+                const inside = lbl.querySelector('select, [role="combobox"], .chosen-container, .select2-container');
+                if (inside && !candidates.includes(inside)) candidates.push(inside);
+
+                const container = lbl.closest('.control-group, .form-group, .demo-form-group, tr, td, .form-item, div') || lbl.parentElement;
+                if (container) {
+                  const siblingSelect = container.querySelector('select, [role="combobox"], .chosen-container, .select2-container');
+                  if (siblingSelect && this.isValidSelectElement(siblingSelect) && !candidates.includes(siblingSelect)) candidates.push(siblingSelect);
+                }
+              }
+            }
+          }
+        }
+        if (criteria.names) {
+          for (const name of criteria.names) {
+            try {
+              const els = doc.querySelectorAll(`select[name="${name}"], select[id="${name}"], select[name*="${name}"], select[id*="${name}"]`);
+              els.forEach(el => {
+                if (this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
+              });
+            } catch (e) {}
+          }
+        }
+        const allSelects = doc.querySelectorAll('select, [role="combobox"], .chosen-container, .select2-container');
+        allSelects.forEach(el => {
+          if (!candidates.includes(el)) candidates.push(el);
+        });
+
+        for (const ctrl of candidates) {
+          const opts = this.getOptions(ctrl);
+          const matched = this.matchOption(opts, targetMatcher);
+          if (matched) {
+            return { control: ctrl, option: matched, allOptions: opts };
+          }
+        }
+        return null;
+      },
+
+      async waitForDropdownWithOption(doc, targetMatcher, criteria = {}, maxWaitMs = 8000, pollIntervalMs = 150) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWaitMs) {
+          const match = this.findDropdownWithOption(doc, targetMatcher, criteria);
+          if (match && match.control && match.option) return match;
+          await Utils.sleep(pollIntervalMs);
+        }
+        return null;
+      },
+
+      selectAndVerify(control, targetValueOrText) {
+        if (!control) return { success: false, error: 'No dropdown control provided' };
+        const options = this.getOptions(control);
+        if (options.length === 0) return { success: false, error: 'Dropdown has no options' };
+
+        let matched = this.matchOption(options, targetValueOrText);
+        if (!matched) {
+          return {
+            success: false,
+            error: `Option "${targetValueOrText}" not found. Available: [${options.map(o => `"${o.text}"`).join(', ')}]`,
+            availableOptions: options.map(o => o.text)
+          };
+        }
+
+        if (control.tagName === 'SELECT') {
+          control.selectedIndex = matched.index;
+          control.value = matched.value;
+          if (matched.element) matched.element.selected = true;
+          Utils.triggerEvents(control);
+
+          const actualIndex = control.selectedIndex;
+          const actualOption = control.options[actualIndex];
+          const actualText = actualOption ? Utils.cleanText(actualOption.text) : '';
+          const actualValue = control.value;
+
+          const isVerified = (actualValue === matched.value) ||
+                             (actualText.toLowerCase() === matched.text.toLowerCase()) ||
+                             (actualText.toLowerCase().includes(matched.text.toLowerCase()));
+
+          if (!isVerified) {
+            return {
+              success: false,
+              error: `Selection verification failed. Expected "${matched.text}", actual selected: "${actualText}"`,
+              selectedText: actualText,
+              selectedValue: actualValue
+            };
+          }
+
+          return {
+            success: true,
+            selectedText: actualText,
+            selectedValue: actualValue,
+            availableOptions: options.map(o => o.text)
+          };
+        }
+
+        if (matched.element) {
+          try { matched.element.click(); } catch (e) {
+            matched.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          }
+          return {
+            success: true,
+            selectedText: matched.text,
+            selectedValue: matched.value,
+            availableOptions: options.map(o => o.text)
+          };
+        }
+        return { success: false, error: 'Unable to select on custom control' };
+      },
+
       findDropdown(doc, criteria) {
         if (!doc) doc = document;
         if (criteria.selectors) {
@@ -3057,71 +3252,9 @@
         }
         return null;
       },
-      isValidSelectElement(el) {
-        if (!el) return false;
-        const tag = el.tagName.toUpperCase();
-        return tag === 'SELECT' || el.classList.contains('chosen-container') || el.classList.contains('select2-container') || el.getAttribute('role') === 'combobox';
-      },
-      getOptions(control) {
-        if (!control) return [];
-        if (control.tagName === 'SELECT') {
-          return Array.from(control.options).map((opt, idx) => ({
-            index: idx,
-            value: opt.value,
-            text: Utils.cleanText(opt.text),
-            element: opt,
-            selected: opt.selected
-          }));
-        }
-        if (control.classList.contains('chosen-container') || control.classList.contains('select2-container')) {
-          const nativeSelect = control.parentElement?.querySelector('select') || control.previousElementSibling;
-          if (nativeSelect && nativeSelect.tagName === 'SELECT') return this.getOptions(nativeSelect);
-        }
-        const optionEls = control.querySelectorAll('[role="option"], li, .dropdown-item, a');
-        return Array.from(optionEls).map((el, idx) => ({
-          index: idx,
-          value: el.getAttribute('data-value') || el.getAttribute('value') || Utils.cleanText(el.textContent),
-          text: Utils.cleanText(el.textContent),
-          element: el,
-          selected: el.classList.contains('active') || el.classList.contains('selected') || el.getAttribute('aria-selected') === 'true'
-        }));
-      },
+
       selectOption(control, targetValueOrText) {
-        if (!control || !targetValueOrText) return { success: false, error: 'Missing control or target option' };
-        const search = Utils.cleanText(String(targetValueOrText)).toLowerCase();
-        const options = this.getOptions(control);
-        if (options.length === 0) return { success: false, error: 'No options found in dropdown control' };
-
-        let matched = options.find(o => o.text.toLowerCase() === search);
-        if (!matched) matched = options.find(o => o.value.toLowerCase() === search);
-        if (!matched) matched = options.find(o => o.text.toLowerCase().includes(search));
-        if (!matched) matched = options.find(o => search.includes(o.text.toLowerCase()) && o.text.length > 2);
-        if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
-
-        if (!matched) {
-          return { success: false, error: `Option "${targetValueOrText}" not found. Available: [${options.map(o => `"${o.text}"`).join(', ')}]` };
-        }
-
-        if (control.tagName === 'SELECT') {
-          control.selectedIndex = matched.index;
-          control.value = matched.value;
-          if (matched.element) matched.element.selected = true;
-          Utils.triggerEvents(control);
-          try {
-            const win = control.ownerDocument?.defaultView || window;
-            const $ = win.$ || win.jQuery;
-            if ($) $(control).trigger('chosen:updated').trigger('change');
-          } catch (e) {}
-          return { success: true, selectedText: matched.text, selectedValue: matched.value };
-        }
-
-        if (matched.element) {
-          try { matched.element.click(); } catch (e) {
-            matched.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-          }
-          return { success: true, selectedText: matched.text, selectedValue: matched.value };
-        }
-        return { success: false, error: 'Failed to apply selection' };
+        return this.selectAndVerify(control, targetValueOrText);
       }
     };
 
@@ -3132,7 +3265,7 @@
           const text = Utils.cleanText(el.textContent || el.value || '');
           const onclick = (el.getAttribute('onclick') || '').toLowerCase();
           const title = (el.getAttribute('title') || '').toLowerCase();
-          const idOrClass = `${el.id} ${el.className}`.toLowerCase();
+          const idOrClass = `${el.id || ''} ${el.className || ''}`.toLowerCase();
           return /toggle\s*editor/i.test(text) || /toggle\s*editor/i.test(title) || /toggleeditor/i.test(onclick) || /toggle-editor|editor-toggle/i.test(idOrClass);
         });
         const textarea = doc.querySelector('#target_description, #description, textarea[name="description"], textarea[name*="description"]');
@@ -3140,41 +3273,54 @@
         const contentEditable = doc.querySelector('#target_description[contenteditable="true"], #description[contenteditable="true"], [name="description"][contenteditable="true"], div.note-editable, .tox-edit-area [contenteditable="true"]');
         return { toggleEditorBtn: toggleButtons[0] || null, textarea, iframe, contentEditable };
       },
+
       async ensureAndFillDescription(doc, rawDescription, log) {
         if (!rawDescription) return { success: false, error: 'No description text provided' };
         const htmlContent = formatDescriptionHtml(rawDescription);
         const cleanPlainText = rawDescription.replace(/<[^>]+>/g, '').trim();
-        const controls = this.findDescriptionControls(doc);
+
+        log?.('Checking Description editor state...');
+        let controls = this.findDescriptionControls(doc);
 
         if (controls.toggleEditorBtn) {
           log?.(`Found Toggle Editor control: "${Utils.cleanText(controls.toggleEditorBtn.textContent || 'Toggle Editor')}"`);
-          const needsToggle = (!controls.iframe && !controls.contentEditable && (!window.tinymce || !window.tinymce.get('description')));
-          if (needsToggle) {
-            log?.('Activating Toggle Editor control...');
+          const win = doc.defaultView || (typeof window !== 'undefined' ? window : null);
+          const hasTinyMce = !!(win?.tinymce?.get('description') || win?.tinymce?.activeEditor);
+          const hasIframeBody = !!(controls.iframe && controls.iframe.contentDocument?.body);
+
+          if (!hasTinyMce && !hasIframeBody && !controls.contentEditable) {
+            log?.('Activating Toggle Editor...');
             try { controls.toggleEditorBtn.click(); } catch (e) {
               controls.toggleEditorBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
             }
-            await Utils.sleep(400);
+            await Utils.waitFor(() => {
+              const re = this.findDescriptionControls(doc);
+              const w = doc.defaultView || window;
+              return (re.iframe && re.iframe.contentDocument?.body) || (w?.tinymce?.get('description')) || re.contentEditable;
+            }, 3000, 150);
           }
         }
 
         let insertedIntoRichText = false;
+        let insertedContent = '';
+
         try {
-          const win = doc.defaultView || window;
-          if (win.tinymce && typeof win.tinymce.get === 'function') {
+          const win = doc.defaultView || (typeof window !== 'undefined' ? window : null);
+          if (win?.tinymce && typeof win.tinymce.get === 'function') {
             const editor = win.tinymce.get('description') || win.tinymce.get('target_description') || win.tinymce.activeEditor;
             if (editor) {
               editor.setContent(htmlContent);
               editor.save();
               insertedIntoRichText = true;
-              log?.('Inserted formatted HTML via TinyMCE editor instance.');
+              insertedContent = editor.getContent();
+              log?.('Inserted formatted HTML via TinyMCE editor instance API.');
             }
           }
         } catch (e) {}
 
         try {
-          const win = doc.defaultView || window;
-          if (win.Joomla?.editors?.instances?.description) {
+          const win = doc.defaultView || (typeof window !== 'undefined' ? window : null);
+          if (win?.Joomla?.editors?.instances?.description) {
             win.Joomla.editors.instances.description.setValue(htmlContent);
             insertedIntoRichText = true;
             log?.('Inserted formatted HTML via Joomla.editors instance.');
@@ -3182,46 +3328,56 @@
         } catch (e) {}
 
         try {
-          const refreshedControls = this.findDescriptionControls(doc);
-          const iframe = refreshedControls.iframe;
+          controls = this.findDescriptionControls(doc);
+          const iframe = controls.iframe;
           if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
             iframe.contentDocument.body.innerHTML = htmlContent;
             iframe.contentDocument.body.dispatchEvent(new Event('input', { bubbles: true }));
             iframe.contentDocument.body.dispatchEvent(new Event('change', { bubbles: true }));
             insertedIntoRichText = true;
-            log?.('Inserted formatted HTML into description iframe body.');
+            insertedContent = iframe.contentDocument.body.innerHTML;
+            log?.('Inserted formatted HTML into description editor iframe body.');
           }
         } catch (e) {}
 
         try {
-          const refreshedControls = this.findDescriptionControls(doc);
-          const ce = refreshedControls.contentEditable;
+          controls = this.findDescriptionControls(doc);
+          const ce = controls.contentEditable;
           if (ce) {
             ce.innerHTML = htmlContent;
             ce.dispatchEvent(new Event('input', { bubbles: true }));
             ce.dispatchEvent(new Event('change', { bubbles: true }));
             insertedIntoRichText = true;
+            insertedContent = ce.innerHTML;
             log?.('Inserted formatted HTML into contenteditable container.');
           }
         } catch (e) {}
 
-        const textarea = this.findDescriptionControls(doc).textarea;
+        controls = this.findDescriptionControls(doc);
+        const textarea = controls.textarea;
         if (textarea) {
           textarea.value = cleanPlainText;
           Utils.triggerEvents(textarea);
           log?.('Updated description textarea with clean paragraphs.');
         }
 
-        return (insertedIntoRichText || textarea) ? { success: true } : { success: false, error: 'Editor not found' };
+        let isVerified = false;
+        if (insertedIntoRichText && insertedContent && insertedContent.length > 10) {
+          isVerified = true;
+        } else if (textarea && textarea.value && textarea.value.length > 10) {
+          isVerified = true;
+        }
+
+        return isVerified ? { success: true, isRichText: insertedIntoRichText } : { success: false, error: 'Description insertion verification failed' };
       }
     };
 
     return {
-      version: '2.3.0-DICE2',
+      version: '2.4.0-DICE2',
       async runDryRun(targetDoc, extractedFields = {}, options = {}) {
         if (!targetDoc) targetDoc = document;
         const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
-        log(`🔍 [DICE DRY-RUN] Starting inspection on document: "${targetDoc.title || 'Untitled'}"...`);
+        log(`🔍 [DICE DRY-RUN] Starting diagnostic inspection on document: "${targetDoc.title || 'Untitled'}"...`);
 
         const checks = {
           diceForm: !!targetDoc.querySelector('form, #adminForm, #legacy-vehicle-form, .form-validate'),
@@ -3237,43 +3393,40 @@
           vehicleFields: { totalFound: 0, expected: 18, details: {} }
         };
 
-        const catCtrl = DropdownManager.findDropdown(targetDoc, {
+        const catMatch = DropdownManager.findDropdownWithOption(targetDoc, /vehicles/i, {
           selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name*="cat"]'],
           labels: [/^category\s*\*?$/i, /\bcategory\b/i],
           names: ['category', 'target_category', 'parent_id', 'catid']
         });
-        if (catCtrl) {
+        if (catMatch) {
           checks.category.found = true;
-          checks.category.control = catCtrl.id || catCtrl.name || catCtrl.tagName;
-          const match = DropdownManager.getOptions(catCtrl).find(o => /vehicles/i.test(o.text) || /vehicles/i.test(o.value));
-          checks.category.optionFound = !!match;
-          log(`✓ Category dropdown found (id: "${checks.category.control}"). "Vehicles": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.category.control = catMatch.control.id || catMatch.control.name || catMatch.control.tagName;
+          checks.category.optionFound = true;
+          log(`✓ Category dropdown found (id: "${checks.category.control}"). "Vehicles": FOUND ✓`);
         }
 
-        const subCatCtrl = DropdownManager.findDropdown(targetDoc, {
+        const subCatMatch = DropdownManager.findDropdownWithOption(targetDoc, /car\s*-\s*parts/i, {
           selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2'],
           labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
           names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2']
         });
-        if (subCatCtrl) {
+        if (subCatMatch) {
           checks.subCategory.found = true;
-          checks.subCategory.control = subCatCtrl.id || subCatCtrl.name || subCatCtrl.tagName;
-          const match = DropdownManager.getOptions(subCatCtrl).find(o => /car\s*-\s*parts/i.test(o.text) || /car\s*-\s*parts/i.test(o.value));
-          checks.subCategory.optionFound = !!match;
-          log(`✓ Sub Category dropdown found. "Car - parts": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.subCategory.control = subCatMatch.control.id || subCatMatch.control.name || subCatMatch.control.tagName;
+          checks.subCategory.optionFound = true;
+          log(`✓ Sub Category dropdown found. "Car - parts": FOUND ✓`);
         }
 
-        const thirdCatCtrl = DropdownManager.findDropdown(targetDoc, {
+        const thirdCatMatch = DropdownManager.findDropdownWithOption(targetDoc, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
           selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3'],
           labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i],
           names: ['third_category', 'target_used_cars_sa', 'cat_id_3']
         });
-        if (thirdCatCtrl) {
+        if (thirdCatMatch) {
           checks.thirdLevelCategory.found = true;
-          checks.thirdLevelCategory.control = thirdCatCtrl.id || thirdCatCtrl.name || thirdCatCtrl.tagName;
-          const match = DropdownManager.getOptions(thirdCatCtrl).find(o => /used\s*cars\s*in\s*south\s*africa/i.test(o.text) || /all\s*south\s*africa/i.test(o.text));
-          checks.thirdLevelCategory.optionFound = !!match;
-          log(`✓ 3rd-level Category dropdown found. "Used cars in South Africa": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.thirdLevelCategory.control = thirdCatMatch.control.id || thirdCatMatch.control.name || thirdCatMatch.control.tagName;
+          checks.thirdLevelCategory.optionFound = true;
+          log(`✓ 3rd-level Category dropdown found. "Used cars in South Africa": FOUND ✓`);
         }
 
         const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
@@ -3282,52 +3435,45 @@
           checks.priceInput.element = priceInp.id || priceInp.name;
         }
 
-        let priceCurrCtrl = priceInp ? (priceInp.closest('.control-group, .form-group, .demo-form-group, tr, td, div')?.querySelector('select')) : null;
-        if (!priceCurrCtrl) {
-          priceCurrCtrl = DropdownManager.findDropdown(targetDoc, {
-            selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
-            labels: [/^currency\s*\*?$/i, /price\s*currency/i],
-            names: ['currency', 'target_currency']
-          });
-        }
-        if (priceCurrCtrl) {
+        const currMatch = DropdownManager.findDropdownWithOption(targetDoc, /\br\b|\brand\b|zar/i, {
+          selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
+          labels: [/^currency\s*\*?$/i, /price\s*currency/i],
+          names: ['currency', 'target_currency']
+        });
+        if (currMatch) {
           checks.priceCurrency.found = true;
-          checks.priceCurrency.control = priceCurrCtrl.id || priceCurrCtrl.name || priceCurrCtrl.tagName;
-          const match = DropdownManager.getOptions(priceCurrCtrl).find(o => /\br\b|\brand\b|zar/i.test(o.text) || /\br\b|\brand\b|zar/i.test(o.value));
-          checks.priceCurrency.optionFound = !!match;
-          log(`✓ Price currency dropdown found. "R (Rand)": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.priceCurrency.control = currMatch.control.id || currMatch.control.name || currMatch.control.tagName;
+          checks.priceCurrency.optionFound = true;
+          log(`✓ Price currency dropdown found. "R (Rand)": FOUND ✓`);
         }
 
-        const tagCtrl = DropdownManager.findDropdown(targetDoc, {
+        const tagMatch = DropdownManager.findDropdownWithOption(targetDoc, /sale/i, {
           selectors: ['#target_tags', '#target_tag', '#tags', '#tag', 'select[name="tags"]', 'select[name="tag"]', 'select[name*="tag"]'],
           labels: [/^tags?\s*(?:dropdown)?\s*\*?$/i, /\btag\b/i],
           names: ['tags', 'tag', 'target_tags']
         });
-        if (tagCtrl) {
+        if (tagMatch) {
           checks.tagDropdown.found = true;
-          checks.tagDropdown.control = tagCtrl.id || tagCtrl.name || tagCtrl.tagName;
-          const match = DropdownManager.getOptions(tagCtrl).find(o => /sale/i.test(o.text) || /sale/i.test(o.value));
-          checks.tagDropdown.optionFound = !!match;
-          log(`✓ Tag dropdown found. "Sale": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.tagDropdown.control = tagMatch.control.id || tagMatch.control.name || tagMatch.control.tagName;
+          checks.tagDropdown.optionFound = true;
+          log(`✓ Tag dropdown found. "Sale": FOUND ✓`);
         }
 
-        const locCtrl = DropdownManager.findDropdown(targetDoc, {
+        const locMatch = DropdownManager.findDropdownWithOption(targetDoc, /south\s*africa/i, {
           selectors: ['#target_country', '#target_location', '#country', '#location', 'select[name="location"]', 'select[name="country"]', 'select[name*="location"]', 'select[name*="country"]'],
           labels: [/^location\s*(?:dropdown)?\s*\*?$/i, /^country\s*(?:\/\s*location)?\s*\*?$/i, /\blocation\b/i],
           names: ['country', 'location', 'target_country', 'target_location']
         });
-        if (locCtrl) {
+        if (locMatch) {
           checks.locationDropdown.found = true;
-          checks.locationDropdown.control = locCtrl.id || locCtrl.name || locCtrl.tagName;
-          const match = DropdownManager.getOptions(locCtrl).find(o => /south\s*africa/i.test(o.text) || /south\s*africa/i.test(o.value));
-          checks.locationDropdown.optionFound = !!match;
-          log(`✓ Location dropdown found. "South Africa": ${match ? 'FOUND ✓' : 'NOT FOUND ✗'}`);
+          checks.locationDropdown.control = locMatch.control.id || locMatch.control.name || locMatch.control.tagName;
+          checks.locationDropdown.optionFound = true;
+          log(`✓ Location dropdown found. "South Africa": FOUND ✓`);
         }
 
         const descControls = DescriptionManager.findDescriptionControls(targetDoc);
         checks.toggleEditor.found = !!descControls.toggleEditorBtn;
         checks.descriptionEditor.found = !!(descControls.textarea || descControls.iframe || descControls.contentEditable);
-        log(`✓ Description Toggle Editor: ${checks.toggleEditor.found ? 'FOUND ✓' : 'NOT FOUND (Visible editor detected)'}`);
 
         log('✓ Dry-run completed with 0 form modifications.');
         return { success: true, isDryRun: true, checks };
@@ -3337,109 +3483,271 @@
         if (!targetDoc) targetDoc = document;
         if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
         const fields = extractedData.fields || extractedData.normalized || extractedData;
-        const stepDelayMs = options.stepDelayMs || 300;
-        const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
+        const opts = Object.assign({ stepDelayMs: 300, maxWaitMs: 8000, pollIntervalMs: 150 }, options);
+        const log = (msg) => { if (typeof opts.logCallback === 'function') opts.logCallback(msg); };
 
-        log(`🚀 [DICE AUTO-FILL] Beginning automated form population for: "${fields.title || 'Vehicle Listing'}"...`);
+        const result = {
+          success: false,
+          failedStep: null,
+          stepsCompleted: [],
+          fieldVerifications: [],
+          errors: [],
+          timestamp: new Date().toISOString()
+        };
 
-        // 1. Category -> Vehicles
-        const catCtrl = DropdownManager.findDropdown(targetDoc, {
-          selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name*="cat"]'],
-          labels: [/^category\s*\*?$/i, /\bcategory\b/i],
-          names: ['category', 'target_category', 'parent_id', 'catid']
-        });
-        if (catCtrl) {
-          const selRes = DropdownManager.selectOption(catCtrl, 'Vehicles');
-          if (selRes.success) log(`✓ Selected Category → "${selRes.selectedText}"`);
-        }
-        await Utils.sleep(stepDelayMs);
+        log(`🚀 [DICE AUTO-FILL] Beginning form automation for: "${fields.title || 'Vehicle Listing'}"...`);
 
-        // 2. Sub Category -> Car - parts
-        const subCatCtrl = await Utils.waitFor(() => DropdownManager.findDropdown(targetDoc, {
-          selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2'],
-          labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
-          names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2']
-        }), 6000, 150);
-        if (subCatCtrl) {
-          const selRes = DropdownManager.selectOption(subCatCtrl, 'Car - parts') || DropdownManager.selectOption(subCatCtrl, 'Cars');
-          if (selRes.success) log(`✓ Selected Sub Category → "${selRes.selectedText}"`);
-        }
-        await Utils.sleep(stepDelayMs);
+        try {
+          // 1. Category -> Vehicles
+          log('1. Locating Category dropdown (option: "Vehicles")...');
+          const catMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /vehicles/i, {
+            selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name="parent_id[]"]', 'select[name*="cat"]'],
+            labels: [/^category\s*\*?$/i, /\bcategory\b/i],
+            names: ['category', 'target_category', 'parent_id', 'parent_id[]', 'catid']
+          }, opts.maxWaitMs, opts.pollIntervalMs);
 
-        // 3. Third-level Category -> Used cars in South Africa
-        const thirdCatCtrl = await Utils.waitFor(() => DropdownManager.findDropdown(targetDoc, {
-          selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3'],
-          labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i],
-          names: ['third_category', 'target_used_cars_sa', 'cat_id_3']
-        }), 6000, 150);
-        if (thirdCatCtrl) {
-          const selRes = DropdownManager.selectOption(thirdCatCtrl, 'Used cars in South Africa') || DropdownManager.selectOption(thirdCatCtrl, 'All South Africa');
-          if (selRes.success) log(`✓ Selected Third-level Category → "${selRes.selectedText}"`);
-        }
-        await Utils.sleep(stepDelayMs);
-
-        // 4. Populate Vehicle Fields
-        SmartPasteEngine.fillTargetForm(targetDoc, fields);
-        log('✓ Applied vehicle field mapping.');
-
-        // 5. Price row & Currency -> R (Rand)
-        const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
-        if (priceInp && fields.price) {
-          const digitsOnly = String(fields.price).replace(/[^\d]/g, '');
-          if (digitsOnly) {
-            priceInp.value = digitsOnly;
-            Utils.triggerEvents(priceInp);
-            log(`✓ Set Price: "${digitsOnly}"`);
+          if (!catMatch || !catMatch.control) {
+            const err = 'Could not find Category dropdown containing option "Vehicles"';
+            log(`❌ ${err}`);
+            result.failedStep = 'Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Category: Vehicles');
+            return result;
           }
-        }
-        let priceCurrCtrl = priceInp ? (priceInp.closest('.control-group, .form-group, .demo-form-group, tr, td, div')?.querySelector('select')) : null;
-        if (!priceCurrCtrl) {
-          priceCurrCtrl = DropdownManager.findDropdown(targetDoc, {
+
+          const catSelRes = DropdownManager.selectAndVerify(catMatch.control, 'Vehicles');
+          log(`Category:\n  selector → ${catMatch.control.id || catMatch.control.name || catMatch.control.tagName}\n  selected value → ${catSelRes.selectedText}\n  status → ${catSelRes.success ? 'PASS' : 'FAIL'}`);
+
+          if (!catSelRes.success) {
+            const err = `Category selection failed: ${catSelRes.error}`;
+            log(`❌ ${err}`);
+            result.failedStep = 'Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Category: Vehicles');
+            return result;
+          }
+          result.stepsCompleted.push('Category: Vehicles');
+
+          // 2. Sub Category -> Car - parts (WAIT FOR AJAX UPDATE)
+          log('2. Waiting for Sub Category dropdown to populate with "Car - parts"...');
+          const subCatMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /car\s*-\s*parts|cars?\s*-\s*parts/i, {
+            selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2', 'select[name="parent_id[]"]'],
+            labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
+            names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2', 'parent_id[]']
+          }, opts.maxWaitMs, opts.pollIntervalMs);
+
+          if (!subCatMatch || !subCatMatch.control) {
+            const err = 'Could not select Sub Category: Car - parts (dropdown option did not populate in time)';
+            log(`❌ ${err}`);
+            result.failedStep = 'Sub Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Sub Category: Car - parts');
+            return result;
+          }
+
+          const subCatSelRes = DropdownManager.selectAndVerify(subCatMatch.control, 'Car - parts');
+          log(`Sub Category:\n  selector → ${subCatMatch.control.id || subCatMatch.control.name || subCatMatch.control.tagName}\n  available options → [${(subCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${subCatSelRes.selectedText}\n  status → ${subCatSelRes.success ? 'PASS' : 'FAIL'}`);
+
+          if (!subCatSelRes.success) {
+            const err = `Sub Category selection failed: ${subCatSelRes.error}`;
+            log(`❌ ${err}`);
+            result.failedStep = 'Sub Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Sub Category: Car - parts');
+            return result;
+          }
+          result.stepsCompleted.push('SubCategory: Car - parts');
+
+          // 3. Third-level Category -> Used cars in South Africa (WAIT FOR AJAX UPDATE)
+          log('3. Waiting for Third-level Category dropdown to populate with "Used cars in South Africa"...');
+          const thirdCatMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
+            selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3', 'select[name="parent_id[]"]'],
+            labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i, /sub\s*sub\s*category/i],
+            names: ['third_category', 'target_used_cars_sa', 'cat_id_3', 'parent_id[]']
+          }, opts.maxWaitMs, opts.pollIntervalMs);
+
+          if (!thirdCatMatch || !thirdCatMatch.control) {
+            const err = 'Could not select Third-level Sub Category: Used cars in South Africa (dropdown option did not populate in time)';
+            log(`❌ ${err}`);
+            result.failedStep = 'Third-level Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Third-level Category: Used cars in South Africa');
+            return result;
+          }
+
+          const thirdCatSelRes = DropdownManager.selectAndVerify(thirdCatMatch.control, 'Used cars in South Africa');
+          log(`Third-level:\n  selector → ${thirdCatMatch.control.id || thirdCatMatch.control.name || thirdCatMatch.control.tagName}\n  available options → [${(thirdCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${thirdCatSelRes.selectedText}\n  status → ${thirdCatSelRes.success ? 'PASS' : 'FAIL'}`);
+
+          if (!thirdCatSelRes.success) {
+            const err = `Third-level Category selection failed: ${thirdCatSelRes.error}`;
+            log(`❌ ${err}`);
+            result.failedStep = 'Third-level Category';
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, 'Could not select Third-level Category: Used cars in South Africa');
+            return result;
+          }
+          result.stepsCompleted.push('ThirdLevelCategory: Used cars in South Africa');
+
+          // 4. Wait for vehicle fields to reveal
+          log('4. Waiting for vehicle form fields to reveal in DOM...');
+          await Utils.waitFor(() => {
+            const titleInp = targetDoc.querySelector('#target_vehicle_title, #target_title, #title, input[name="title"]');
+            const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"]');
+            const container = targetDoc.querySelector('#dice-vehicle-fields-section, .form-horizontal, form');
+            return !!(titleInp || priceInp || (container && container.style.display !== 'none'));
+          }, opts.maxWaitMs, opts.pollIntervalMs);
+
+          await Utils.sleep(opts.stepDelayMs);
+
+          // 5. Populate Vehicle Fields
+          log('5. Populating vehicle input fields...');
+          SmartPasteEngine.fillTargetForm(targetDoc, fields);
+          result.stepsCompleted.push('Vehicle Fields Populated');
+
+          // 6. Price & Currency -> R (Rand)
+          log('6. Handling Price row (numeric price + R (Rand) currency)...');
+          const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
+          if (priceInp && fields.price) {
+            const digitsOnly = String(fields.price).replace(/[^\d]/g, '');
+            if (digitsOnly) {
+              priceInp.value = digitsOnly;
+              Utils.triggerEvents(priceInp);
+              log(`✓ Set Price value: "${digitsOnly}"`);
+            }
+          }
+
+          const currMatch = DropdownManager.findDropdownWithOption(targetDoc, /\br\b|\brand\b|zar/i, {
             selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
             labels: [/^currency\s*\*?$/i, /price\s*currency/i],
             names: ['currency', 'target_currency']
           });
-        }
-        if (priceCurrCtrl) {
-          const selRes = DropdownManager.selectOption(priceCurrCtrl, 'R (Rand)') || DropdownManager.selectOption(priceCurrCtrl, 'ZAR') || DropdownManager.selectOption(priceCurrCtrl, 'R');
-          if (selRes.success) log(`✓ Selected Price Currency → "${selRes.selectedText}"`);
-        }
 
-        // 6. Tag -> Sale
-        const tagCtrl = DropdownManager.findDropdown(targetDoc, {
-          selectors: ['#target_tags', '#target_tag', '#tags', '#tag', 'select[name="tags"]', 'select[name="tag"]', 'select[name*="tag"]'],
-          labels: [/^tags?\s*(?:dropdown)?\s*\*?$/i, /\btag\b/i],
-          names: ['tags', 'tag', 'target_tags']
-        });
-        if (tagCtrl) {
-          const selRes = DropdownManager.selectOption(tagCtrl, 'Sale');
-          if (selRes.success) log(`✓ Selected Tag → "${selRes.selectedText}"`);
+          if (currMatch) {
+            const selRes = DropdownManager.selectAndVerify(currMatch.control, 'R (Rand)');
+            if (selRes.success) {
+              log(`✓ Selected Price Currency → "${selRes.selectedText}"`);
+              result.stepsCompleted.push('Price Currency: R (Rand)');
+            } else {
+              const fallbackRes = DropdownManager.selectAndVerify(currMatch.control, 'ZAR') || DropdownManager.selectAndVerify(currMatch.control, 'R');
+              if (fallbackRes && fallbackRes.success) {
+                log(`✓ Selected Price Currency fallback → "${fallbackRes.selectedText}"`);
+                result.stepsCompleted.push(`Price Currency: ${fallbackRes.selectedText}`);
+              }
+            }
+          }
+
+          // 7. Tag -> Sale
+          log('7. Locating Tag dropdown...');
+          const tagMatch = DropdownManager.findDropdownWithOption(targetDoc, /sale/i, {
+            selectors: ['#target_tags', '#target_tag', '#tags', '#tag', 'select[name="tags"]', 'select[name="tag"]', 'select[name*="tag"]'],
+            labels: [/^tags?\s*(?:dropdown)?\s*\*?$/i, /\btag\b/i],
+            names: ['tags', 'tag', 'target_tags']
+          });
+          if (tagMatch) {
+            const selRes = DropdownManager.selectAndVerify(tagMatch.control, 'Sale');
+            if (selRes.success) {
+              log(`✓ Selected Tag → "${selRes.selectedText}"`);
+              result.stepsCompleted.push('Tag: Sale');
+            }
+          }
+
+          // 8. Location -> South Africa
+          log('8. Locating Location dropdown...');
+          const locMatch = DropdownManager.findDropdownWithOption(targetDoc, /south\s*africa/i, {
+            selectors: ['#target_country', '#target_location', '#country', '#location', 'select[name="location"]', 'select[name="country"]', 'select[name*="location"]', 'select[name*="country"]'],
+            labels: [/^location\s*(?:dropdown)?\s*\*?$/i, /^country\s*(?:\/\s*location)?\s*\*?$/i, /\blocation\b/i],
+            names: ['country', 'location', 'target_country', 'target_location']
+          });
+          if (locMatch) {
+            const selRes = DropdownManager.selectAndVerify(locMatch.control, 'South Africa');
+            if (selRes.success) {
+              log(`✓ Selected Location → "${selRes.selectedText}"`);
+              result.stepsCompleted.push('Location: South Africa');
+            }
+          }
+
+          // 9. Description with Toggle Editor
+          log('9. Processing Description editor area and Toggle Editor...');
+          if (fields.description) {
+            const descRes = await DescriptionManager.ensureAndFillDescription(targetDoc, fields.description, log);
+            log(`Description:\n  editor type → ${descRes.isRichText ? 'RichText (TinyMCE/iframe)' : 'Textarea'}\n  content inserted → ${descRes.success ? 'PASS' : 'FAIL'}`);
+            if (descRes.success) {
+              result.stepsCompleted.push('Description Inserted');
+            } else {
+              log(`❌ Description error: ${descRes.error}`);
+              result.errors.push(`Description: ${descRes.error}`);
+            }
+          }
+
+          // 10. Verify Fields in DOM
+          log('10. Verifying all field values in DOM...');
+          await Utils.sleep(opts.stepDelayMs);
+
+          const fieldVerificationList = [
+            { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]'] },
+            { key: 'year', label: 'Year', selectors: ['#target_year', '#year', 'input[name="year"]'] },
+            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', 'input[name="kilometers_driven"]'] },
+            { key: 'price', label: 'Price', selectors: ['#target_price', '#price', 'input[name="price"]'] }
+          ];
+
+          let hasFieldVerificationFailure = false;
+          let failedFieldName = '';
+
+          for (const item of fieldVerificationList) {
+            const expectedVal = fields[item.key];
+            if (!expectedVal) continue;
+
+            let el = null;
+            for (const sel of item.selectors) {
+              try {
+                el = targetDoc.querySelector(sel);
+                if (el) break;
+              } catch (e) {}
+            }
+
+            const actualVal = el ? Utils.cleanText(el.value) : '';
+            const pass = el && (actualVal.length > 0);
+
+            log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || sel) : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
+
+            result.fieldVerifications.push({
+              field: item.label,
+              target: el ? (el.id || el.name) : null,
+              expected: expectedVal,
+              actual: actualVal,
+              status: pass ? 'PASS' : 'FAIL'
+            });
+
+            if (!pass) {
+              hasFieldVerificationFailure = true;
+              failedFieldName = item.label;
+            }
+          }
+
+          if (hasFieldVerificationFailure) {
+            const err = `Auto-fill incomplete: Failed field: ${failedFieldName}`;
+            log(`❌ ${err}`);
+            result.failedStep = failedFieldName;
+            result.errors.push(err);
+            this.renderErrorBanner(targetDoc, `Failed field: ${failedFieldName}`);
+            return result;
+          }
+
+          result.success = true;
+          log('\n==================================================');
+          log('✓ Auto-fill completed');
+          log('Please review the form before manually submitting.');
+          log('==================================================');
+
+          this.renderCompletionBanner(targetDoc);
+          return result;
+
+        } catch (err) {
+          log(`❌ Auto-fill encountered an error: ${err.message}`);
+          result.errors.push(err.message);
+          this.renderErrorBanner(targetDoc, err.message);
+          return result;
         }
-
-        // 7. Location -> South Africa
-        const locCtrl = DropdownManager.findDropdown(targetDoc, {
-          selectors: ['#target_country', '#target_location', '#country', '#location', 'select[name="location"]', 'select[name="country"]', 'select[name*="location"]', 'select[name*="country"]'],
-          labels: [/^location\s*(?:dropdown)?\s*\*?$/i, /^country\s*(?:\/\s*location)?\s*\*?$/i, /\blocation\b/i],
-          names: ['country', 'location', 'target_country', 'target_location']
-        });
-        if (locCtrl) {
-          const selRes = DropdownManager.selectOption(locCtrl, 'South Africa');
-          if (selRes.success) log(`✓ Selected Location → "${selRes.selectedText}"`);
-        }
-
-        // 8. Description with Toggle Editor
-        if (fields.description) {
-          await DescriptionManager.ensureAndFillDescription(targetDoc, fields.description, log);
-        }
-
-        await Utils.sleep(stepDelayMs);
-        log('\n==================================================');
-        log('✓ Auto-fill completed');
-        log('Please review the form before manually submitting.');
-        log('==================================================');
-
-        this.renderCompletionBanner(targetDoc);
-        return { success: true };
       },
 
       renderCompletionBanner(targetDoc) {
@@ -3455,6 +3763,20 @@
           banner.querySelector('#dice-banner-close').onclick = () => banner.remove();
           setTimeout(() => { if (banner.parentElement) banner.remove(); }, 12000);
         } catch (e) {}
+      },
+
+      renderErrorBanner(targetDoc, reason) {
+        if (!targetDoc || !targetDoc.body) return;
+        try {
+          const existing = targetDoc.getElementById('dice-autofill-banner');
+          if (existing) existing.remove();
+          const banner = targetDoc.createElement('div');
+          banner.id = 'dice-autofill-banner';
+          banner.style.cssText = 'position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#1e1014; color:#f8fafc; padding:12px 20px; border-radius:8px; border-left:5px solid #ef4444; box-shadow:0 10px 25px rgba(0,0,0,0.35); z-index:99999999; font-family:sans-serif; font-size:13px; display:flex; align-items:center; gap:12px;';
+          banner.innerHTML = `<div style="font-size:18px;">❌</div><div><div style="font-weight:700; color:#f87171; font-size:14px;">❌ Auto-fill stopped</div><div style="color:#cbd5e1; font-size:12px;">${reason}</div></div><button id="dice-banner-close" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:2px 6px; margin-left:8px;">✕</button>`;
+          targetDoc.body.appendChild(banner);
+          banner.querySelector('#dice-banner-close').onclick = () => banner.remove();
+        } catch (e) {}
       }
     };
   })();
@@ -3465,7 +3787,6 @@
     statusBarEl: null,
 
     init() {
-      // 1. Listen for live events via GM_addValueChangeListener
       if (typeof GM_addValueChangeListener === 'function') {
         GM_addValueChangeListener('DICE_PENDING_JOB', (name, oldValue, newValue, remote) => {
           if (newValue) {
@@ -3474,7 +3795,6 @@
         });
       }
 
-      // 2. Storage event listener fallback
       window.addEventListener('storage', (e) => {
         if (e.key === 'DICE_PENDING_JOB' && e.newValue) {
           try {
@@ -3484,7 +3804,6 @@
         }
       });
 
-      // 3. Cold-start check on page load
       this.checkPendingColdStart();
     },
 
@@ -3502,32 +3821,32 @@
 
       if (pendingJob && pendingJob.jobId && !this.processedJobIds.has(pendingJob.jobId)) {
         const ageMs = Date.now() - (pendingJob.timestamp || 0);
-        if (ageMs < 600000) { // Within 10 minutes
+        if (ageMs < 600000) {
           this.renderPendingWidget(pendingJob);
         }
       }
     },
 
-    handleJob(job, isLiveEvent = false) {
+    async handleJob(job, isLiveEvent = false) {
       if (!job || !job.jobId) return;
       if (this.processedJobIds.has(job.jobId)) return;
 
       const ageMs = Date.now() - (job.timestamp || 0);
-      if (ageMs > 600000) return; // Ignore jobs older than 10 mins
+      if (ageMs > 600000) return;
 
       this.processedJobIds.add(job.jobId);
-
       this.renderPendingWidget(job);
 
       if (isLiveEvent) {
         if (job.action === 'dryrun') {
-          DiceAutomator.runDryRun(document, job.fields || {}, {
+          await DiceAutomator.runDryRun(document, job.fields || {}, {
             logCallback: (m) => this.logToWidget(m)
           });
         } else {
-          DiceAutomator.fillForm(document, job, {
+          const res = await DiceAutomator.fillForm(document, job, {
             logCallback: (m) => this.logToWidget(m)
           });
+          this.updateWidgetStatus(res);
         }
       }
     },
@@ -3564,7 +3883,7 @@
           <button id="dice-bar-close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px;">✕</button>
         </div>
         <div style="padding: 10px 12px;">
-          <div style="color: #4ade80; font-weight: 700; margin-bottom: 4px;">Vehicle data received ✓</div>
+          <div id="dice-bar-status-text" style="color: #4ade80; font-weight: 700; margin-bottom: 4px;">Vehicle data received ✓</div>
           <div style="font-weight: 600; color: #f8fafc; word-break: break-word;">${title}</div>
           ${price ? `<div style="color: #94a3b8; font-size: 11px;">Price: ${price}</div>` : ''}
           <div id="dice-bar-log" style="margin-top: 8px; max-height: 80px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none;"></div>
@@ -3583,18 +3902,32 @@
       this.statusBarEl = widget;
 
       widget.querySelector('#dice-bar-close').onclick = () => widget.remove();
-      widget.querySelector('#dice-bar-run-autofill').onclick = () => {
+      widget.querySelector('#dice-bar-run-autofill').onclick = async () => {
         this.logToWidget('Starting auto-fill sequence...');
-        DiceAutomator.fillForm(document, job, {
+        const res = await DiceAutomator.fillForm(document, job, {
           logCallback: (m) => this.logToWidget(m)
         });
+        this.updateWidgetStatus(res);
       };
-      widget.querySelector('#dice-bar-run-dryrun').onclick = () => {
+      widget.querySelector('#dice-bar-run-dryrun').onclick = async () => {
         this.logToWidget('Starting dry-run inspection...');
-        DiceAutomator.runDryRun(document, job.fields || {}, {
+        await DiceAutomator.runDryRun(document, job.fields || {}, {
           logCallback: (m) => this.logToWidget(m)
         });
       };
+    },
+
+    updateWidgetStatus(result) {
+      if (!this.statusBarEl) return;
+      const statusEl = this.statusBarEl.querySelector('#dice-bar-status-text');
+      if (!statusEl) return;
+      if (result && result.success) {
+        statusEl.style.color = '#4ade80';
+        statusEl.textContent = 'Auto-fill completed ✓';
+      } else {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = `❌ Auto-fill stopped: ${result?.failedStep || 'Error'}`;
+      }
     },
 
     logToWidget(msg) {

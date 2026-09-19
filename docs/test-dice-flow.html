@@ -16,7 +16,7 @@
 <body>
 
   <h1>🚗 DICE 2 Form Automation Test Suite</h1>
-  <p style="color: #94a3b8;">Automated verification of dependent dropdown sequencing, Price + R (Rand), Tag, Location, Toggle Editor, and Dry-Run inspection.</p>
+  <p style="color: #94a3b8;">Automated verification of dynamic AJAX dependent dropdown sequencing, Price + R (Rand), Tag, Location, Toggle Editor, and False-Success prevention.</p>
 
   <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
     <button id="btn-run-tests" onclick="runSuite()" class="btn btn-success" style="padding: 8px 16px; cursor: pointer; font-weight: bold;">⚡ Run Test Suite</button>
@@ -44,18 +44,14 @@
       <div id="sub-category-wrapper" class="control-group" style="margin-bottom: 12px; display: none;">
         <label for="sub_category" class="control-label">Sub Category *</label>
         <select id="sub_category" name="sub_category" class="demo-control">
-          <option value="">-- Select Sub Category --</option>
-          <option value="Car - parts">Car - parts</option>
-          <option value="Motorcycles">Motorcycles</option>
+          <option value="">- Sub categories -</option>
         </select>
       </div>
 
       <div id="third-category-wrapper" class="control-group" style="margin-bottom: 12px; display: none;">
         <label for="third_category" class="control-label">Third-level Sub Category *</label>
         <select id="third_category" name="third_category" class="demo-control">
-          <option value="">-- Select Region/Type --</option>
-          <option value="Used cars in South Africa">Used cars in South Africa</option>
-          <option value="Commercial Vehicles">Commercial Vehicles</option>
+          <option value="">- Select region -</option>
         </select>
       </div>
 
@@ -207,7 +203,7 @@
   <script src="dice-automator.js"></script>
 
   <script>
-    // Wire dynamic dropdown behavior in simulated DICE form
+    // Wire dynamic AJAX-like dropdown behavior in simulated DICE form
     function wireSimulatedFormEvents() {
       const cat = document.getElementById('category');
       const subCatWrap = document.getElementById('sub-category-wrapper');
@@ -228,6 +224,15 @@
       cat.onchange = () => {
         if (cat.value === 'Vehicles') {
           subCatWrap.style.display = 'block';
+          subCat.innerHTML = '<option value="">- Sub categories -</option>';
+          // Simulate AJAX delay: Populate options 80ms later
+          setTimeout(() => {
+            subCat.innerHTML = `
+              <option value="">- Sub categories -</option>
+              <option value="Car - parts">Car - parts</option>
+              <option value="Motorcycles">Motorcycles</option>
+            `;
+          }, 80);
         } else {
           subCatWrap.style.display = 'none';
           thirdCatWrap.style.display = 'none';
@@ -238,6 +243,15 @@
       subCat.onchange = () => {
         if (subCat.value === 'Car - parts') {
           thirdCatWrap.style.display = 'block';
+          thirdCat.innerHTML = '<option value="">- Select region -</option>';
+          // Simulate AJAX delay: Populate 3rd level options 80ms later
+          setTimeout(() => {
+            thirdCat.innerHTML = `
+              <option value="">- Select region -</option>
+              <option value="Used cars in South Africa">Used cars in South Africa</option>
+              <option value="Commercial Vehicles">Commercial Vehicles</option>
+            `;
+          }, 80);
         } else {
           thirdCatWrap.style.display = 'none';
           fieldsSection.style.display = 'none';
@@ -246,7 +260,9 @@
 
       thirdCat.onchange = () => {
         if (thirdCat.value === 'Used cars in South Africa') {
-          fieldsSection.style.display = 'block';
+          setTimeout(() => {
+            fieldsSection.style.display = 'block';
+          }, 40);
         } else {
           fieldsSection.style.display = 'none';
         }
@@ -309,9 +325,11 @@
         simContainer.style.display = 'block';
         wireSimulatedFormEvents();
 
-        // Make all controls visible for comprehensive dry-run inspection check
+        // Initially populate with full options to test dry-run detector
         document.getElementById('sub-category-wrapper').style.display = 'block';
+        document.getElementById('sub_category').innerHTML = '<option value="Car - parts">Car - parts</option>';
         document.getElementById('third-category-wrapper').style.display = 'block';
+        document.getElementById('third_category').innerHTML = '<option value="Used cars in South Africa">Used cars in South Africa</option>';
         document.getElementById('dice-vehicle-fields-section').style.display = 'block';
 
         const dryRunRes = await window.DiceAutomator.runDryRun(document, mExt, {
@@ -340,18 +358,20 @@
         assert(document.getElementById('category').value === '', 'Category remained unmodified during dry-run');
         assert(document.getElementById('target_price').value === '', 'Price remained unmodified during dry-run');
 
-        log('\n=== TEST 3: DYNAMIC DEPENDENT FORM AUTOMATION (MAZDA) ===');
-        // Reset form state to initial (hidden dependent sections)
+        log('\n=== TEST 3: DYNAMIC ASYNC DEPENDENT FORM AUTOMATION (MAZDA) ===');
+        // Reset form state to real initial state (sub_category has only placeholder and sections are hidden)
         document.getElementById('category').value = '';
-        document.getElementById('sub_category').value = '';
-        document.getElementById('third_category').value = '';
+        document.getElementById('sub_category').innerHTML = '<option value="">- Sub categories -</option>';
+        document.getElementById('third_category').innerHTML = '<option value="">- Select region -</option>';
         document.getElementById('sub-category-wrapper').style.display = 'none';
         document.getElementById('third-category-wrapper').style.display = 'none';
         document.getElementById('dice-vehicle-fields-section').style.display = 'none';
         window.__formSubmitted = false;
 
         const autoFillRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
-          stepDelayMs: 50,
+          stepDelayMs: 60,
+          maxWaitMs: 3000,
+          pollIntervalMs: 30,
           logCallback: (m) => log(`  [AutoFillLog] ${m}`)
         });
 
@@ -360,9 +380,9 @@
         // Check Step 1: Category
         assert(document.getElementById('category').value === 'Vehicles', 'Step 1: Category is "Vehicles"');
         // Check Step 2: Sub Category
-        assert(document.getElementById('sub_category').value === 'Car - parts', 'Step 2: Sub Category is "Car - parts"');
+        assert(document.getElementById('sub_category').value === 'Car - parts', 'Step 2: Sub Category is "Car - parts" (resolved after async AJAX load)');
         // Check Step 3: Third-level Sub Category
-        assert(document.getElementById('third_category').value === 'Used cars in South Africa', 'Step 3: Third-level is "Used cars in South Africa"');
+        assert(document.getElementById('third_category').value === 'Used cars in South Africa', 'Step 3: Third-level is "Used cars in South Africa" (resolved after async AJAX load)');
         // Check Step 4: Dependent fields revealed
         assert(document.getElementById('dice-vehicle-fields-section').style.display === 'block', 'Step 4: Vehicle fields section revealed');
 
@@ -400,7 +420,29 @@
         // Check Step 11: Completion Banner rendered
         assert(document.getElementById('dice-autofill-banner') !== null, 'Completion banner displayed with review message');
 
-        log('\n=== TEST 4: ASYNCHRONOUS JOB & STALE-PAYLOAD PROTECTION ===');
+        log('\n=== TEST 4: STRICT FAILURE GATING & NO FALSE SUCCESS ===');
+        // Reset form and intentionally prevent Sub Category from updating
+        document.getElementById('category').value = '';
+        document.getElementById('sub_category').innerHTML = '<option value="">- Sub categories -</option>';
+        document.getElementById('category').onchange = () => { /* Do nothing - sub_category will remain only placeholder */ };
+
+        const failRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
+          stepDelayMs: 20,
+          maxWaitMs: 300,
+          pollIntervalMs: 30,
+          logCallback: (m) => log(`  [FailTestLog] ${m}`)
+        });
+
+        assert(failRes.success === false, 'Automation correctly reported FAILURE when Sub Category did not populate');
+        assert(failRes.failedStep === 'Sub Category', 'Failed step recorded as "Sub Category"');
+        const errBanner = document.getElementById('dice-autofill-banner');
+        assert(errBanner !== null && errBanner.textContent.includes('Auto-fill stopped'), 'Red failure banner displayed ("Auto-fill stopped")');
+        assert(!errBanner.textContent.includes('Auto-fill completed'), 'NO FALSE SUCCESS BANNER DISPLAYED');
+
+        // Re-wire valid events for subsequent tests
+        wireSimulatedFormEvents();
+
+        log('\n=== TEST 5: ASYNCHRONOUS JOB & STALE-PAYLOAD PROTECTION ===');
         const processedJobs = new Set();
         const processJob = (job) => {
           if (!job || !job.jobId) return { handled: false, reason: 'Invalid payload' };
@@ -427,7 +469,7 @@
         log('==================================================');
 
         document.getElementById('suite-status').className = 'status-badge badge-pass';
-        document.getElementById('suite-status').textContent = 'PASSED (ALL 32 ASSERTIONS)';
+        document.getElementById('suite-status').textContent = 'PASSED (ALL ASSERTIONS)';
 
       } catch (err) {
         log(`\nEXCEPTION CAUGHT: ${err.message}`);
