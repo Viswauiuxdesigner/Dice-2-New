@@ -2988,12 +2988,12 @@
       triggerEvents(el) {
         if (!el) return;
         try {
-          el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-          el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }));
         } catch (e) {}
         try {
-          if (typeof el.onchange === 'function') el.onchange();
+          if (typeof el.onchange === 'function') el.onchange.call(el);
         } catch (e) {}
         try {
           const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
@@ -3009,6 +3009,99 @@
           const $ = win?.$ || win?.jQuery || (typeof unsafeWindow !== 'undefined' ? (unsafeWindow.$ || unsafeWindow.jQuery) : null);
           if ($ && typeof $(el).trigger === 'function') {
             $(el).trigger('input').trigger('change').trigger('chosen:updated').trigger('select2:select');
+          }
+        } catch (e) {}
+      },
+      triggerCategoryEvents(el, level = 0, doc = document) {
+        if (!el) return;
+        try {
+          el.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true, composed: true }));
+          el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }));
+        } catch (e) {}
+        try {
+          if (typeof el.onchange === 'function') el.onchange.call(el);
+        } catch (e) {}
+
+        const pageWins = [];
+        try {
+          if (typeof unsafeWindow !== 'undefined' && unsafeWindow) pageWins.push(unsafeWindow);
+          const docWin = el.ownerDocument?.defaultView;
+          if (docWin && !pageWins.includes(docWin)) pageWins.push(docWin);
+          if (typeof window !== 'undefined' && window && !pageWins.includes(window)) pageWins.push(window);
+        } catch (e) {}
+
+        for (const win of pageWins) {
+          try {
+            if (typeof win.getsubcat === 'function') {
+              try { win.getsubcat(el.value, level); } catch (e) {}
+              try { win.getsubcat(el.value); } catch (e) {}
+            }
+            if (typeof win.get_sub_cat === 'function') {
+              try { win.get_sub_cat(el.value, level); } catch (e) {}
+            }
+            if (typeof win.getSubCategories === 'function') {
+              try { win.getSubCategories(el.value, level); } catch (e) {}
+            }
+            if (typeof win.getCategoryFields === 'function') {
+              try { win.getCategoryFields(el.value); } catch (e) {}
+            }
+          } catch (e) {}
+          try {
+            const $ = win.$ || win.jQuery;
+            if ($ && typeof $(el).trigger === 'function') {
+              $(el).trigger('input').trigger('change').trigger('chosen:updated').trigger('select2:select');
+            }
+          } catch (e) {}
+          try {
+            if (win.document && typeof win.document.id === 'function') {
+              const mEl = win.document.id(el);
+              if (mEl && typeof mEl.fireEvent === 'function') mEl.fireEvent('change');
+            }
+          } catch (e) {}
+        }
+
+        try {
+          const targetDoc = el.ownerDocument || doc || document;
+          const root = targetDoc.head || targetDoc.documentElement || targetDoc.body;
+          if (root) {
+            const scriptEl = targetDoc.createElement('script');
+            const elId = el.id ? JSON.stringify(el.id) : 'null';
+            const elName = el.name ? JSON.stringify(el.name) : 'null';
+            const valStr = JSON.stringify(el.value);
+            const lvlNum = typeof level === 'number' ? level : 0;
+            scriptEl.textContent = `(function() {
+              try {
+                var target = null;
+                if (${elId}) target = document.getElementById(${elId});
+                if (!target && ${elName}) target = document.querySelector('select[name=' + ${elName} + ']');
+                if (!target) {
+                  var allCats = document.querySelectorAll('select[name="parent_id[]"], select[name="category"], select[name="sub_category"], select[name="third_category"], .jomcl-category');
+                  if (allCats && allCats[${lvlNum}]) target = allCats[${lvlNum}];
+                }
+                if (target) {
+                  target.value = ${valStr};
+                  if (typeof target.onchange === 'function') {
+                    try { target.onchange.call(target); } catch(e) {}
+                  }
+                  var ev = new Event('change', { bubbles: true, cancelable: true });
+                  target.dispatchEvent(ev);
+                }
+                if (typeof window.getsubcat === 'function') {
+                  try { window.getsubcat(${valStr}, ${lvlNum}); } catch(e) {}
+                  try { window.getsubcat(${valStr}); } catch(e) {}
+                }
+                if (typeof window.get_sub_cat === 'function') {
+                  try { window.get_sub_cat(${valStr}, ${lvlNum}); } catch(e) {}
+                }
+                if (typeof window.jQuery === 'function' && target) {
+                  try { window.jQuery(target).trigger('change'); } catch(e) {}
+                }
+              } catch(err) {}
+            })();`;
+            root.appendChild(scriptEl);
+            scriptEl.remove();
           }
         } catch (e) {}
       },
@@ -3033,6 +3126,41 @@
         if (el.classList && (el.classList.contains('chosen-container') || el.classList.contains('select2-container'))) return true;
         if (el.getAttribute && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
         return false;
+      },
+
+      getCategorySelect(doc, level = 0) {
+        if (!doc) doc = document;
+        if (level === 0) {
+          return doc.querySelector('#category') ||
+                 doc.querySelector('#target_category') ||
+                 doc.querySelector('#jform_category') ||
+                 doc.querySelector('select[name="category"]') ||
+                 doc.querySelector('#category_div select') ||
+                 doc.querySelectorAll('select[name="parent_id[]"]')[0] ||
+                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[0] ||
+                 null;
+        } else if (level === 1) {
+          return doc.querySelector('#sub_category') ||
+                 doc.querySelector('#target_sub_category') ||
+                 doc.querySelector('#target_cars_parts') ||
+                 doc.querySelector('select[name="sub_category"]') ||
+                 doc.querySelector('#sub_category_div select') ||
+                 doc.querySelector('#cat_id_2') ||
+                 doc.querySelectorAll('select[name="parent_id[]"]')[1] ||
+                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[1] ||
+                 null;
+        } else if (level === 2) {
+          return doc.querySelector('#sub_sub_category') ||
+                 doc.querySelector('#target_used_cars_sa') ||
+                 doc.querySelector('#third_category') ||
+                 doc.querySelector('select[name="third_category"]') ||
+                 doc.querySelector('#sub_sub_category_div select') ||
+                 doc.querySelector('#cat_id_3') ||
+                 doc.querySelectorAll('select[name="parent_id[]"]')[2] ||
+                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[2] ||
+                 null;
+        }
+        return null;
       },
 
       getOptions(control) {
@@ -3073,6 +3201,34 @@
         if (!matched) matched = options.find(o => search.includes(o.text.toLowerCase()) && o.text.length > 2);
         if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
         return matched || null;
+      },
+
+      findDropdownForLevel(doc, level, targetMatcher, fallbackCriteria = {}) {
+        if (!doc) doc = document;
+        const levelSelect = this.getCategorySelect(doc, level);
+        if (levelSelect && this.isValidSelectElement(levelSelect)) {
+          const opts = this.getOptions(levelSelect);
+          const matched = this.matchOption(opts, targetMatcher);
+          if (matched) {
+            return {
+              control: levelSelect,
+              option: matched,
+              allOptions: opts,
+              level: level
+            };
+          }
+        }
+        return this.findDropdownWithOption(doc, targetMatcher, fallbackCriteria);
+      },
+
+      async waitForLevelOption(doc, level, targetMatcher, fallbackCriteria = {}, maxWaitMs = 8000, pollIntervalMs = 150) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWaitMs) {
+          const match = this.findDropdownForLevel(doc, level, targetMatcher, fallbackCriteria);
+          if (match && match.control && match.option) return match;
+          await Utils.sleep(pollIntervalMs);
+        }
+        return null;
       },
 
       findDropdownWithOption(doc, targetMatcher, criteria = {}) {
@@ -3149,7 +3305,7 @@
         return null;
       },
 
-      selectAndVerify(control, targetValueOrText) {
+      selectAndVerify(control, targetValueOrText, level = null, doc = null) {
         if (!control) return { success: false, error: 'No dropdown control provided' };
         const options = this.getOptions(control);
         if (options.length === 0) return { success: false, error: 'Dropdown has no options' };
@@ -3167,7 +3323,12 @@
           control.selectedIndex = matched.index;
           control.value = matched.value;
           if (matched.element) matched.element.selected = true;
-          Utils.triggerEvents(control);
+
+          if (typeof level === 'number') {
+            Utils.triggerCategoryEvents(control, level, doc || control.ownerDocument || document);
+          } else {
+            Utils.triggerEvents(control);
+          }
 
           const actualIndex = control.selectedIndex;
           const actualOption = control.options[actualIndex];
@@ -3196,7 +3357,9 @@
         }
 
         if (matched.element) {
-          try { matched.element.click(); } catch (e) {
+          try {
+            matched.element.click();
+          } catch (e) {
             matched.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
           }
           return {
@@ -3206,7 +3369,8 @@
             availableOptions: options.map(o => o.text)
           };
         }
-        return { success: false, error: 'Unable to select on custom control' };
+
+        return { success: false, error: 'Unsupported control type' };
       },
 
       findDropdown(doc, criteria) {
@@ -3393,10 +3557,10 @@
           vehicleFields: { totalFound: 0, expected: 18, details: {} }
         };
 
-        const catMatch = DropdownManager.findDropdownWithOption(targetDoc, /vehicles/i, {
-          selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name*="cat"]'],
+        const catMatch = DropdownManager.findDropdownForLevel(targetDoc, 0, /vehicles/i, {
+          selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name="parent_id[]"]', 'select[name*="cat"]'],
           labels: [/^category\s*\*?$/i, /\bcategory\b/i],
-          names: ['category', 'target_category', 'parent_id', 'catid']
+          names: ['category', 'target_category', 'parent_id', 'parent_id[]', 'catid']
         });
         if (catMatch) {
           checks.category.found = true;
@@ -3405,10 +3569,10 @@
           log(`✓ Category dropdown found (id: "${checks.category.control}"). "Vehicles": FOUND ✓`);
         }
 
-        const subCatMatch = DropdownManager.findDropdownWithOption(targetDoc, /car\s*-\s*parts/i, {
-          selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2'],
+        const subCatMatch = DropdownManager.findDropdownForLevel(targetDoc, 1, /car\s*-\s*parts/i, {
+          selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2', 'select[name="parent_id[]"]'],
           labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
-          names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2']
+          names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2', 'parent_id[]']
         });
         if (subCatMatch) {
           checks.subCategory.found = true;
@@ -3417,10 +3581,10 @@
           log(`✓ Sub Category dropdown found. "Car - parts": FOUND ✓`);
         }
 
-        const thirdCatMatch = DropdownManager.findDropdownWithOption(targetDoc, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
-          selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3'],
-          labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i],
-          names: ['third_category', 'target_used_cars_sa', 'cat_id_3']
+        const thirdCatMatch = DropdownManager.findDropdownForLevel(targetDoc, 2, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
+          selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3', 'select[name="parent_id[]"]'],
+          labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i, /sub\s*sub\s*category/i],
+          names: ['third_category', 'target_used_cars_sa', 'cat_id_3', 'parent_id[]']
         });
         if (thirdCatMatch) {
           checks.thirdLevelCategory.found = true;
@@ -3498,9 +3662,9 @@
         log(`🚀 [DICE AUTO-FILL] Beginning form automation for: "${fields.title || 'Vehicle Listing'}"...`);
 
         try {
-          // 1. Category -> Vehicles
+          // 1. Category -> Vehicles (Level 0)
           log('1. Locating Category dropdown (option: "Vehicles")...');
-          const catMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /vehicles/i, {
+          const catMatch = await DropdownManager.waitForLevelOption(targetDoc, 0, /vehicles/i, {
             selectors: ['#target_category', '#category', '#jform_category', 'select[name="category"]', 'select[name="parent_id"]', 'select[name="parent_id[]"]', 'select[name*="cat"]'],
             labels: [/^category\s*\*?$/i, /\bcategory\b/i],
             names: ['category', 'target_category', 'parent_id', 'parent_id[]', 'catid']
@@ -3515,7 +3679,7 @@
             return result;
           }
 
-          const catSelRes = DropdownManager.selectAndVerify(catMatch.control, 'Vehicles');
+          const catSelRes = DropdownManager.selectAndVerify(catMatch.control, 'Vehicles', 0, targetDoc);
           log(`Category:\n  selector → ${catMatch.control.id || catMatch.control.name || catMatch.control.tagName}\n  selected value → ${catSelRes.selectedText}\n  status → ${catSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!catSelRes.success) {
@@ -3528,9 +3692,9 @@
           }
           result.stepsCompleted.push('Category: Vehicles');
 
-          // 2. Sub Category -> Car - parts (WAIT FOR AJAX UPDATE)
+          // 2. Sub Category -> Car - parts (Level 1, WAIT FOR AJAX UPDATE)
           log('2. Waiting for Sub Category dropdown to populate with "Car - parts"...');
-          const subCatMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /car\s*-\s*parts|cars?\s*-\s*parts/i, {
+          const subCatMatch = await DropdownManager.waitForLevelOption(targetDoc, 1, /car\s*-\s*parts|cars?\s*-\s*parts/i, {
             selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2', 'select[name="parent_id[]"]'],
             labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
             names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2', 'parent_id[]']
@@ -3545,7 +3709,7 @@
             return result;
           }
 
-          const subCatSelRes = DropdownManager.selectAndVerify(subCatMatch.control, 'Car - parts');
+          const subCatSelRes = DropdownManager.selectAndVerify(subCatMatch.control, 'Car - parts', 1, targetDoc);
           log(`Sub Category:\n  selector → ${subCatMatch.control.id || subCatMatch.control.name || subCatMatch.control.tagName}\n  available options → [${(subCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${subCatSelRes.selectedText}\n  status → ${subCatSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!subCatSelRes.success) {
@@ -3558,9 +3722,9 @@
           }
           result.stepsCompleted.push('SubCategory: Car - parts');
 
-          // 3. Third-level Category -> Used cars in South Africa (WAIT FOR AJAX UPDATE)
+          // 3. Third-level Category -> Used cars in South Africa (Level 2, WAIT FOR AJAX UPDATE)
           log('3. Waiting for Third-level Category dropdown to populate with "Used cars in South Africa"...');
-          const thirdCatMatch = await DropdownManager.waitForDropdownWithOption(targetDoc, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
+          const thirdCatMatch = await DropdownManager.waitForLevelOption(targetDoc, 2, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
             selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3', 'select[name="parent_id[]"]'],
             labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i, /sub\s*sub\s*category/i],
             names: ['third_category', 'target_used_cars_sa', 'cat_id_3', 'parent_id[]']
@@ -3575,7 +3739,7 @@
             return result;
           }
 
-          const thirdCatSelRes = DropdownManager.selectAndVerify(thirdCatMatch.control, 'Used cars in South Africa');
+          const thirdCatSelRes = DropdownManager.selectAndVerify(thirdCatMatch.control, 'Used cars in South Africa', 2, targetDoc);
           log(`Third-level:\n  selector → ${thirdCatMatch.control.id || thirdCatMatch.control.name || thirdCatMatch.control.tagName}\n  available options → [${(thirdCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${thirdCatSelRes.selectedText}\n  status → ${thirdCatSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!thirdCatSelRes.success) {

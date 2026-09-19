@@ -221,6 +221,11 @@
         ifr.contentDocument.body.innerHTML = '<p>Editor initialized.</p>';
       }
 
+      window.__getsubcatCalls = [];
+      window.getsubcat = (val, level) => {
+        window.__getsubcatCalls.push({ val, level });
+      };
+
       cat.onchange = () => {
         if (cat.value === 'Vehicles') {
           subCatWrap.style.display = 'block';
@@ -383,6 +388,8 @@
         assert(document.getElementById('sub_category').value === 'Car - parts', 'Step 2: Sub Category is "Car - parts" (resolved after async AJAX load)');
         // Check Step 3: Third-level Sub Category
         assert(document.getElementById('third_category').value === 'Used cars in South Africa', 'Step 3: Third-level is "Used cars in South Africa" (resolved after async AJAX load)');
+        // Check Page-Context Bridge: getsubcat was called in page context for dependent cascading
+        assert(window.__getsubcatCalls && window.__getsubcatCalls.length >= 2, 'PAGE-CONTEXT BRIDGE: window.getsubcat(value, level) successfully invoked for cascading dropdowns');
         // Check Step 4: Dependent fields revealed
         assert(document.getElementById('dice-vehicle-fields-section').style.display === 'block', 'Step 4: Vehicle fields section revealed');
 
