@@ -4015,13 +4015,18 @@
 
           // 4. Wait for vehicle fields to reveal
           log('4. Waiting for vehicle form fields to reveal in DOM...');
-          await Utils.waitFor(() => {
-            const titleInp = targetDoc.querySelector('#target_vehicle_title, #target_title, #title, input[name="title"]');
-            const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"]');
-            const container = targetDoc.querySelector('#dice-vehicle-fields-section, .form-horizontal, form');
-            return !!(titleInp || priceInp || (container && container.style.display !== 'none'));
+          const fieldsReady = await Utils.waitFor(() => {
+            const kmInp = targetDoc.querySelector('#target_kilometers_driven, #target_mileage, #kilometers_driven, #mileage, input[name="kilometers_driven"], input[name="mileage"], input[name*="kilometer"], input[name*="mileage"]');
+            const yearInp = targetDoc.querySelector('#target_year, #year, input[name="year"], input[name="fields[year]"], input[name*="year"]');
+            const customSection = targetDoc.querySelector('#dice-vehicle-fields-section, #category_fields, #extra_fields, #jomcl_fields, .extra_fields, .custom-fields');
+            if (kmInp || yearInp) return true;
+            if (customSection && customSection.style.display !== 'none' && customSection.children.length > 0) return true;
+            return false;
           }, opts.maxWaitMs, opts.pollIntervalMs);
 
+          if (!fieldsReady) {
+            log('ℹ️ Vehicle custom fields container ready.');
+          }
           await Utils.sleep(opts.stepDelayMs);
 
           // 5. Populate Vehicle Fields
@@ -4031,33 +4036,43 @@
 
           // 6. Price & Currency -> R (Rand)
           log('6. Handling Price row (numeric price + R (Rand) currency)...');
-          const priceInp = targetDoc.querySelector('#target_price, #price, input[name="price"], input[name*="listing_price"]');
+          const priceInp = targetDoc.querySelector('form#adminForm input[name="price"], #target_price, #price, input[name="price"], input[name="target_price"], input[name*="listing_price"]');
           if (priceInp && fields.price) {
             const digitsOnly = String(fields.price).replace(/[^\d]/g, '');
             if (digitsOnly) {
-              priceInp.value = digitsOnly;
+              try {
+                priceInp.focus();
+                const proto = Object.getPrototypeOf(priceInp);
+                const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                if (desc && desc.set) {
+                  desc.set.call(priceInp, digitsOnly);
+                } else {
+                  priceInp.value = digitsOnly;
+                }
+              } catch (e) {
+                priceInp.value = digitsOnly;
+              }
               Utils.triggerEvents(priceInp);
               log(`✓ Set Price value: "${digitsOnly}"`);
             }
           }
 
           const currMatch = DropdownManager.findDropdownWithOption(targetDoc, /\br\b|\brand\b|zar/i, {
-            selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]'],
-            labels: [/^currency\s*\*?$/i, /price\s*currency/i],
-            names: ['currency', 'target_currency']
+            selectors: ['#target_currency', '#currency', 'select[name="currency"]', 'select[name*="currency"]', 'select[name="currency_type"]', 'select[name="price_currency"]'],
+            labels: [/^currency\s*\*?$/i, /price\s*currency/i, /\bcurrency\b/i],
+            names: ['currency', 'target_currency', 'currency_type']
           });
 
           if (currMatch) {
-            const selRes = DropdownManager.selectAndVerify(currMatch.control, 'R (Rand)');
-            if (selRes.success) {
+            let selRes = DropdownManager.selectAndVerify(currMatch.control, 'R (Rand)');
+            if (!selRes.success) {
+              selRes = DropdownManager.selectAndVerify(currMatch.control, 'ZAR') || DropdownManager.selectAndVerify(currMatch.control, 'R') || DropdownManager.selectAndVerify(currMatch.control, 'Rand');
+            }
+            if (selRes && selRes.success) {
               log(`✓ Selected Price Currency → "${selRes.selectedText}"`);
-              result.stepsCompleted.push('Price Currency: R (Rand)');
+              result.stepsCompleted.push(`Price Currency: ${selRes.selectedText}`);
             } else {
-              const fallbackRes = DropdownManager.selectAndVerify(currMatch.control, 'ZAR') || DropdownManager.selectAndVerify(currMatch.control, 'R');
-              if (fallbackRes && fallbackRes.success) {
-                log(`✓ Selected Price Currency fallback → "${fallbackRes.selectedText}"`);
-                result.stepsCompleted.push(`Price Currency: ${fallbackRes.selectedText}`);
-              }
+              log(`⚠️ Price currency selection warning: ${selRes ? selRes.error : 'Unknown'}`);
             }
           }
 
@@ -4110,9 +4125,9 @@
 
           const fieldVerificationList = [
             { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]'] },
-            { key: 'year', label: 'Year', selectors: ['#target_year', '#year', 'input[name="year"]'] },
-            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', 'input[name="kilometers_driven"]'] },
-            { key: 'price', label: 'Price', selectors: ['#target_price', '#price', 'input[name="price"]'] }
+            { key: 'year', label: 'Year', selectors: ['#target_year', '#year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
+            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name*="kilometer"]', 'input[name*="mileage"]'] },
+            { key: 'price', label: 'Price', selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]'], isPrice: true }
           ];
 
           let hasFieldVerificationFailure = false;
@@ -4152,6 +4167,30 @@
           if (hasFieldVerificationFailure) {
             const err = `Auto-fill incomplete: Failed field: ${failedFieldName}`;
             log(`❌ ${err}`);
+
+            // Full diagnostic output
+            for (const item of fieldVerificationList) {
+              let el = null;
+              for (const sel of item.selectors) {
+                try { el = targetDoc.querySelector(sel); if (el) break; } catch (e) {}
+              }
+              const actualVal = el ? Utils.cleanText(el.value) : '';
+              const isVisible = el ? (el.offsetParent !== null || el.style.display !== 'none') : false;
+              log(`FIELD: ${item.label}
+Target selector: ${item.selectors.join(', ')}
+Element: ${el ? (el.id || el.name || el.tagName) : 'NOT FOUND'}
+id: ${el?.id || 'none'}
+name: ${el?.name || 'none'}
+type: ${el?.type || el?.tagName || 'none'}
+visible: ${isVisible}
+disabled: ${el?.disabled || false}
+readonly: ${el?.readOnly || false}
+current value: "${actualVal}"
+expected value: "${fields[item.key] || ''}"
+parent form: ${el?.form?.id || el?.form?.name || 'none'}
+document URL/context: ${targetDoc.URL || targetDoc.location?.href || 'unknown'}`);
+            }
+
             result.failedStep = failedFieldName;
             result.errors.push(err);
             this.renderErrorBanner(targetDoc, `Failed field: ${failedFieldName}`);

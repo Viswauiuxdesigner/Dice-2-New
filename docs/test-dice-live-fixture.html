@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DICE Realistic Form Live Fixture - Offline Mock</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: #1e293b;
+      padding: 16px;
+    }
+    .page-container {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+    }
+    @media (max-width: 860px) {
+      .page-container { grid-template-columns: 1fr; }
+    }
+    .form-card {
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      padding: 24px;
+    }
+    .form-header {
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    .form-header h1 {
+      font-size: 20px;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-left: 4px solid #3b82f6;
+      padding-left: 8px;
+    }
+    .control-group {
+      margin-bottom: 16px;
+    }
+    .control-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    .required { color: #ef4444; }
+    .inputbox, .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .inputbox:focus, .form-control:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    .row-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .chosen-container {
+      display: inline-block;
+      font-size: 13px;
+      position: relative;
+      vertical-align: middle;
+      width: 100% !important;
+      margin-top: 4px;
+    }
+    .chosen-single {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: block;
+      color: #334155;
+      text-decoration: none;
+      line-height: 1.4;
+      cursor: pointer;
+    }
+    .chosen-single span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #2563eb; color: #ffffff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #64748b; color: #ffffff; }
+    .btn-success { background: #16a34a; color: #ffffff; }
+    .test-panel {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      padding: 16px;
+      font-size: 12px;
+      height: fit-content;
+      position: sticky;
+      top: 16px;
+    }
+    .test-panel h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .test-log {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      max-height: 440px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 12px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 11px;
+      margin-bottom: 8px;
+    }
+    .badge-pass { background: #166534; color: #4ade80; }
+    .badge-fail { background: #991b1b; color: #f87171; }
+    .badge-running { background: #854d0e; color: #fef08a; }
+  </style>
+</head>
+<body>
+
+  <div class="page-container">
+
+    <!-- REALISTIC LIVE DICE / JOMCLASSIFIEDS FORM -->
+    <div class="form-card">
+      <div class="form-header">
+        <h1>🚗 DICE - Post Free Ad</h1>
+        <p style="font-size: 12px; color: #64748b; margin-top: 4px;">Realistic JomClassifieds live form mock fixture</p>
+      </div>
+
+      <form id="adminForm" name="adminForm" class="form-validate form-horizontal" action="/index.php/post-free-ad" method="post" enctype="multipart/form-data">
+
+        <div class="section-title">Ad Details</div>
+
+        <!-- 1. Title -->
+        <div class="control-group">
+          <label class="control-label" for="title">Title <span class="required">*</span></label>
+          <input type="text" id="title" name="title" class="form-control inputbox" placeholder="Vehicle Title">
+        </div>
+
+        <!-- 2. Category Hierarchy Section -->
+        <div class="control-group" id="category_div">
+          <label class="control-label" for="parent_id_0">Category <span class="required">*</span></label>
+          <select id="parent_id_0" name="parent_id[]" class="inputbox jomcl-category chzn-done" onchange="getsubcat(this.value, 0);">
+            <option value="">- Select a category -</option>
+          </select>
+          <div class="chosen-container chosen-container-single parent_id_0_chzn" id="parent_id_0_chzn">
+            <a class="chosen-single"><span>- Select a category -</span></a>
+          </div>
+        </div>
+
+        <!-- 3. Dynamic Category Level 1 Container -->
+        <div class="control-group" id="sub_category_div" style="display: none;">
+          <label class="control-label" for="parent_id_1">Sub Category <span class="required">*</span></label>
+          <select id="parent_id_1" name="parent_id[]" class="inputbox jomcl-category chzn-done" onchange="getsubcat(this.value, 1);">
+            <option value="">- Sub categories -</option>
+          </select>
+          <div class="chosen-container chosen-container-single parent_id_1_chzn" id="parent_id_1_chzn">
+            <a class="chosen-single"><span>- Sub categories -</span></a>
+          </div>
+        </div>
+
+        <!-- Dynamic Category Level 2 Container -->
+        <div class="control-group" id="sub_sub_category_div" style="display: none;">
+          <label class="control-label" for="parent_id_2">Third-level Sub Category <span class="required">*</span></label>
+          <select id="parent_id_2" name="parent_id[]" class="inputbox jomcl-category chzn-done" onchange="getsubcat(this.value, 2);">
+            <option value="">- Sub categories -</option>
+          </select>
+          <div class="chosen-container chosen-container-single parent_id_2_chzn" id="parent_id_2_chzn">
+            <a class="chosen-single"><span>- Sub categories -</span></a>
+          </div>
+        </div>
+
+        <!-- 4. Vehicle Custom Fields (Revealed after Level 2) -->
+        <div id="dice-vehicle-fields-section" style="display: none; border-top: 2px dashed #cbd5e1; padding-top: 16px; margin-top: 16px;">
+          
+          <div class="row-2col">
+            <!-- Seller Type -->
+            <div class="control-group">
+              <label class="control-label" for="seller_type">Seller Type</label>
+              <select id="seller_type" name="seller_type" class="form-control inputbox">
+                <option value="">- None -</option>
+                <option value="dealer">Dealer</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+
+            <!-- Brand -->
+            <div class="control-group">
+              <label class="control-label" for="brand">Brand</label>
+              <input type="text" id="brand" name="brand" class="form-control inputbox" placeholder="e.g. BMW">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <!-- Year -->
+            <div class="control-group">
+              <label class="control-label" for="year">Year <span class="required">*</span></label>
+              <input type="text" id="year" name="year" class="form-control inputbox" placeholder="e.g. 2021">
+            </div>
+
+            <!-- Kilometers Driven -->
+            <div class="control-group">
+              <label class="control-label" for="kilometers_driven">Kilometers Driven <span class="required">*</span></label>
+              <input type="text" id="kilometers_driven" name="kilometers_driven" class="form-control inputbox" placeholder="e.g. 78 000 km">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <!-- Transmission -->
+            <div class="control-group">
+              <label class="control-label" for="transmission">Transmission</label>
+              <input type="text" id="transmission" name="transmission" class="form-control inputbox" placeholder="Automatic">
+            </div>
+
+            <!-- Fuel -->
+            <div class="control-group">
+              <label class="control-label" for="fuel">Fuel</label>
+              <input type="text" id="fuel" name="fuel" class="form-control inputbox" placeholder="Petrol">
+            </div>
+          </div>
+
+          <!-- 6 & 7. Price and Currency Row -->
+          <div class="row-2col">
+            <div class="control-group">
+              <label class="control-label" for="price">Price <span class="required">*</span></label>
+              <input type="text" id="price" name="price" class="form-control inputbox" placeholder="0.00">
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="target_currency">Currency</label>
+              <select id="target_currency" name="currency" class="form-control inputbox">
+                <option value="USD">USD</option>
+                <option value="ZAR">R (Rand)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
+              <div class="chosen-container chosen-container-single target_currency_chzn" id="target_currency_chzn">
+                <a class="chosen-single"><span>USD</span></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. Tag -->
+          <div class="control-group">
+            <label class="control-label" for="target_tags">Tag</label>
+            <select id="target_tags" name="tags" class="form-control inputbox">
+              <option value="">- Select a tag -</option>
+              <option value="sale">Sale</option>
+              <option value="featured">Featured</option>
+            </select>
+          </div>
+
+          <!-- 9. Description (with Realistic Toggle Editor) -->
+          <div class="control-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label class="control-label" style="margin-bottom: 0;">Description</label>
+              <button type="button" id="btn_toggle_editor" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;">[Toggle Editor]</button>
+            </div>
+            <div id="editor_wrapper">
+              <textarea id="target_description" name="description" class="form-control inputbox" style="height: 120px;" placeholder="Vehicle description..."></textarea>
+            </div>
+          </div>
+
+          <!-- 11. Address -->
+          <div class="control-group">
+            <label class="control-label" for="address">Address</label>
+            <input type="text" id="address" name="address" class="form-control inputbox" placeholder="Dealership address">
+          </div>
+
+          <!-- 12. Location -->
+          <div class="control-group">
+            <label class="control-label" for="target_country">Location</label>
+            <select id="target_country" name="location" class="form-control inputbox">
+              <option value="">- Select a country -</option>
+              <option value="ZA">South Africa</option>
+              <option value="US">United States</option>
+              <option value="UK">United Kingdom</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- 14. Action Buttons -->
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; gap: 12px;">
+          <button type="button" id="btn-post-ad" class="btn btn-primary" onclick="window.__formSubmitted = true;">Post Ad</button>
+          <button type="button" id="btn-cancel" class="btn btn-secondary">Cancel</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- TEST CONTROLLER & LOGGING PANEL -->
+    <div class="test-panel">
+      <h2>🧪 DICE MOCK FIXTURE</h2>
+      <div id="fixture-status" class="status-badge badge-running">INITIALIZING FIXTURE...</div>
+      
+      <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <button id="btn-run-automator" class="btn btn-success" style="width: 100%;">▶ RUN DICE AUTOMATOR</button>
+        <button id="btn-reset-fixture" class="btn btn-secondary" style="width: 100%;">🔄 RESET FIXTURE</button>
+      </div>
+
+      <div style="font-size: 11px; color: #cbd5e1; line-height: 1.5; margin-bottom: 8px;">
+        <div><strong>Native Cat:</strong> <span id="dbg-cat">-</span> | <strong>Visible:</strong> <span id="dbg-chzn-cat">-</span></div>
+        <div><strong>Native Sub:</strong> <span id="dbg-subcat">-</span> | <strong>Visible:</strong> <span id="dbg-chzn-subcat">-</span></div>
+        <div><strong>Native 3rd:</strong> <span id="dbg-thirdcat">-</span> | <strong>Visible:</strong> <span id="dbg-chzn-thirdcat">-</span></div>
+        <div><strong>Price:</strong> <span id="dbg-price">-</span></div>
+        <div><strong>Currency:</strong> <span id="dbg-curr">-</span> | <strong>Visible:</strong> <span id="dbg-chzn-curr">-</span></div>
+        <div><strong>Tag:</strong> <span id="dbg-tag">-</span></div>
+        <div><strong>Location:</strong> <span id="dbg-loc">-</span></div>
+      </div>
+
+      <pre id="test-results" class="test-log">Waiting for run...</pre>
+    </div>
+
+  </div>
+
+  <!-- LOAD SCRIPTS -->
+  <script src="normalizers.js"></script>
+  <script src="validators.js"></script>
+  <script src="source-extractor.js"></script>
+  <script src="target-filler.js"></script>
+  <script src="../userscript/car-data-helper.user.js"></script>
+  <script src="dice-automator.js"></script>
+
+  <script>
+    // State trackers
+    window.__formSubmitted = false;
+    window.__toggleEditorClicked = false;
+
+    // Helper to update chosen span text
+    function updateChosen(id, text) {
+      const el = document.getElementById(`${id}_chzn`) || document.querySelector(`.${id}_chzn`);
+      if (el) {
+        const span = el.querySelector('.chosen-single span');
+        if (span) span.textContent = text;
+      }
+    }
+
+    function getChosenText(id) {
+      const el = document.getElementById(`${id}_chzn`) || document.querySelector(`.${id}_chzn`);
+      if (el) {
+        const span = el.querySelector('.chosen-single span');
+        if (span) return span.textContent.trim();
+      }
+      return '';
+    }
+
+    // Initialize Toggle Editor handler
+    const toggleBtn = document.getElementById('btn_toggle_editor');
+    const descTextarea = document.getElementById('target_description');
+
+    toggleBtn.onclick = function() {
+      window.__toggleEditorClicked = true;
+      const editorWrapper = document.getElementById('editor_wrapper');
+      if (descTextarea.style.display !== 'none') {
+        descTextarea.style.display = 'none';
+        // Asynchronously initialize rich text editor iframe (simulating TinyMCE/Joomla editor)
+        setTimeout(() => {
+          let ifr = document.getElementById('description_ifr');
+          if (!ifr) {
+            ifr = document.createElement('iframe');
+            ifr.id = 'description_ifr';
+            ifr.style.width = '100%';
+            ifr.style.height = '130px';
+            ifr.style.border = '1px solid #cbd5e1';
+            ifr.style.borderRadius = '6px';
+            ifr.style.background = '#ffffff';
+            editorWrapper.appendChild(ifr);
+          }
+          ifr.style.display = 'block';
+          try {
+            const doc = ifr.contentDocument || ifr.contentWindow.document;
+            doc.designMode = 'on';
+            if (!doc.body.innerHTML) {
+              doc.body.innerHTML = descTextarea.value ? `<p>${descTextarea.value.replace(/\n/g, '<br>')}</p>` : '<p><br></p>';
+            }
+            doc.body.oninput = () => {
+              descTextarea.value = doc.body.innerText || doc.body.textContent;
+            };
+          } catch (e) {}
+        }, 150);
+      } else {
+        descTextarea.style.display = 'block';
+        const ifr = document.getElementById('description_ifr');
+        if (ifr) ifr.style.display = 'none';
+      }
+    };
+
+    // Simulated JomClassifieds getsubcat bridge
+    window.getsubcat = function(catId, level) {
+      const subCatDiv = document.getElementById('sub_category_div');
+      const subSubCatDiv = document.getElementById('sub_sub_category_div');
+      const fieldsSection = document.getElementById('dice-vehicle-fields-section');
+
+      if (level === 0) {
+        if (String(catId) === '12' || catId === 'Vehicles') {
+          updateChosen('parent_id_0', 'Vehicles (0)');
+          subCatDiv.style.display = 'block';
+          const subSel = document.getElementById('parent_id_1');
+          subSel.innerHTML = '<option value="">- Sub categories -</option>';
+          updateChosen('parent_id_1', '- Sub categories -');
+          setTimeout(() => {
+            subSel.innerHTML = `
+              <option value="">- Sub categories -</option>
+              <option value="20">Cars - Parts</option>
+              <option value="25">Motorcycles</option>
+            `;
+          }, 150);
+        }
+      } else if (level === 1) {
+        if (String(catId) === '20' || catId === 'Cars - Parts') {
+          updateChosen('parent_id_1', 'Cars - Parts');
+          subSubCatDiv.style.display = 'block';
+          const thirdSel = document.getElementById('parent_id_2');
+          thirdSel.innerHTML = '<option value="">- Sub categories -</option>';
+          updateChosen('parent_id_2', '- Sub categories -');
+          setTimeout(() => {
+            thirdSel.innerHTML = `
+              <option value="">- Sub categories -</option>
+              <option value="36">Used cars in South Africa</option>
+              <option value="38">Commercial Vehicles</option>
+            `;
+          }, 150);
+        }
+      } else if (level === 2) {
+        if (String(catId) === '36' || catId === 'Used cars in South Africa') {
+          updateChosen('parent_id_2', 'Used cars in South Africa');
+          fieldsSection.style.display = 'block';
+        }
+      }
+    };
+
+    // Native change listeners to update chosen spans
+    document.getElementById('parent_id_0').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      if (opt) updateChosen('parent_id_0', opt.text);
+    });
+    document.getElementById('parent_id_1').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      if (opt) updateChosen('parent_id_1', opt.text);
+    });
+    document.getElementById('parent_id_2').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      if (opt) updateChosen('parent_id_2', opt.text);
+    });
+    document.getElementById('target_currency').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      if (opt) updateChosen('target_currency', opt.text);
+    });
+
+    function initFixtureAsync() {
+      // Reset form controls
+      document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option>';
+      document.getElementById('parent_id_0').value = '';
+      updateChosen('parent_id_0', '- Select a category -');
+
+      document.getElementById('sub_category_div').style.display = 'none';
+      document.getElementById('sub_sub_category_div').style.display = 'none';
+      document.getElementById('dice-vehicle-fields-section').style.display = 'none';
+
+      document.getElementById('title').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('target_currency').value = 'USD';
+      updateChosen('target_currency', 'USD');
+      document.getElementById('target_tags').value = '';
+      document.getElementById('target_country').value = '';
+      document.getElementById('target_description').value = '';
+      descTextarea.style.display = 'block';
+      const existingIfr = document.getElementById('description_ifr');
+      if (existingIfr) existingIfr.remove();
+
+      window.__formSubmitted = false;
+      window.__toggleEditorClicked = false;
+
+      // Category options hydrate after ~120ms
+      setTimeout(() => {
+        document.getElementById('parent_id_0').innerHTML = `
+          <option value="">- Select a category -</option>
+          <option value="12">Vehicles (0)</option>
+          <option value="15">For Sale (0)</option>
+        `;
+        document.getElementById('fixture-status').className = 'status-badge badge-pass';
+        document.getElementById('fixture-status').textContent = 'FIXTURE READY';
+      }, 120);
+    }
+
+    // Exact live failure payload: 2021 BMW X3
+    const bmwPayload = {
+      title: "2021 BMW X3",
+      price: "549950",
+      year: "2021",
+      kilometersDriven: "78 000 km",
+      transmission: "Automatic",
+      fuel: "Petrol",
+      drivetrain: "4x4",
+      bodyColour: "White",
+      condition: "Used",
+      seats: "5",
+      dealerName: "Cape Town BMW",
+      dealerAddress: "Cape Town, Western Cape",
+      contactNumber: "060 123 4567",
+      description: "Pristine condition 2021 BMW X3 xDrive20d M Sport with panoramic sunroof, leather interior, and full service history."
+    };
+
+    async function runAutomatorTest() {
+      const logEl = document.getElementById('test-results');
+      const statusEl = document.getElementById('fixture-status');
+      logEl.textContent = 'Starting automated test run against DICE live fixture...\n';
+      statusEl.className = 'status-badge badge-running';
+      statusEl.textContent = 'RUNNING TEST...';
+
+      const logs = [];
+      const log = (msg) => {
+        logs.push(msg);
+        logEl.textContent = logs.join('\n');
+      };
+
+      try {
+        log('Target Payload: ' + JSON.stringify(bmwPayload, null, 2));
+
+        const result = await window.DiceAutomator.fillForm(document, { fields: bmwPayload }, {
+          stepDelayMs: 40,
+          maxWaitMs: 3000,
+          pollIntervalMs: 40,
+          logCallback: (m) => log('  [Automator] ' + m)
+        });
+
+        // Update live debug state in UI
+        document.getElementById('dbg-cat').textContent = document.getElementById('parent_id_0').value;
+        document.getElementById('dbg-chzn-cat').textContent = getChosenText('parent_id_0');
+        document.getElementById('dbg-subcat').textContent = document.getElementById('parent_id_1')?.value || 'N/A';
+        document.getElementById('dbg-chzn-subcat').textContent = getChosenText('parent_id_1');
+        document.getElementById('dbg-thirdcat').textContent = document.getElementById('parent_id_2')?.value || 'N/A';
+        document.getElementById('dbg-chzn-thirdcat').textContent = getChosenText('parent_id_2');
+        document.getElementById('dbg-price').textContent = document.getElementById('price').value;
+        document.getElementById('dbg-curr').textContent = document.getElementById('target_currency').value;
+        document.getElementById('dbg-chzn-curr').textContent = getChosenText('target_currency');
+        document.getElementById('dbg-tag').textContent = document.getElementById('target_tags').value;
+        document.getElementById('dbg-loc').textContent = document.getElementById('target_country').value;
+
+        // Perform strict assertions with exact requested format
+        log('\n--- VERIFYING FIXTURE ASSERTIONS ---');
+        
+        const assert = (cond, label) => {
+          if (!cond) {
+            log(`[FAIL] ${label}`);
+            throw new Error(`Assertion failed: ${label}`);
+          }
+          log(`[PASS] ${label}`);
+        };
+
+        // 1. Categories
+        assert(document.getElementById('parent_id_0').value === '12', 'Native Category');
+        assert(getChosenText('parent_id_0').includes('Vehicles'), 'Visible Category');
+        assert(document.getElementById('parent_id_1').value === '20', 'Native Sub Category');
+        assert(getChosenText('parent_id_1').includes('Cars - Parts'), 'Visible Sub Category');
+        assert(document.getElementById('parent_id_2').value === '36', 'Native Third Level');
+        assert(getChosenText('parent_id_2').includes('Used cars in South Africa'), 'Visible Third Level');
+        assert(document.getElementById('dice-vehicle-fields-section').style.display === 'block', 'Vehicle fields revealed');
+
+        // 2. Core Fields
+        assert(document.getElementById('title').value === '2021 BMW X3', 'Title');
+        assert(document.getElementById('year').value === '2021', 'Year');
+        assert(document.getElementById('kilometers_driven').value === '78 000 km', 'Kilometers Driven = 78 000 km');
+        assert(document.getElementById('price').value === '549950', 'Price = 549950');
+        assert(document.getElementById('target_currency').value === 'ZAR', 'Currency = ZAR');
+        assert(getChosenText('target_currency').includes('Rand') || getChosenText('target_currency') === 'ZAR', 'Visible Currency = R (Rand)');
+        assert(document.getElementById('target_tags').value === 'sale', 'Tag = Sale');
+        assert(document.getElementById('target_country').value === 'ZA', 'Location = South Africa');
+
+        // 3. Description Toggle Editor
+        assert(window.__toggleEditorClicked === true, 'Toggle Editor activated');
+        const liveIfr = document.getElementById('description_ifr');
+        const ifrDoc = liveIfr ? (liveIfr.contentDocument || liveIfr.contentWindow?.document) : null;
+        const ifrContent = (ifrDoc && ifrDoc.body) ? (ifrDoc.body.innerHTML || '') : '';
+        assert(liveIfr && liveIfr.style.display === 'block' && ifrContent.length > 20, 'Rich Editor populated');
+        assert(descTextarea.value.length > 20, 'Description textarea synchronized');
+
+        // 4. Safety
+        assert(window.__formSubmitted === false, 'Post Ad NEVER clicked');
+
+        log('\n========================================');
+        log('🎉 ALL FIXTURE TESTS PASSED PERFECTLY!');
+        log('========================================');
+        statusEl.className = 'status-badge badge-pass';
+        statusEl.textContent = 'ALL TESTS PASSED ✓';
+
+      } catch (err) {
+        log('\n❌ EXCEPTION: ' + err.message);
+        statusEl.className = 'status-badge badge-fail';
+        statusEl.textContent = 'TEST FAILED ✗';
+      }
+    }
+
+    document.getElementById('btn-run-automator').onclick = runAutomatorTest;
+    document.getElementById('btn-reset-fixture').onclick = initFixtureAsync;
+
+    // Auto-initialize on load
+    window.addEventListener('load', () => {
+      initFixtureAsync();
+      setTimeout(runAutomatorTest, 300);
+    });
+  </script>
+</body>
+</html>
