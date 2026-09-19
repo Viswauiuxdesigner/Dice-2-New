@@ -626,8 +626,31 @@
         // TEST V: Final Submit/Post Ad is never clicked
         assert(window.__formSubmitted === false, 'TEST V: Final Submit/Post Ad button was NEVER clicked');
 
+        // TEST W: DiceTabListener widget regression test: no ReferenceError on undefined Utils
+        if (window.DiceTabListener && typeof window.DiceTabListener.renderPendingWidget === 'function') {
+          window.DiceTabListener.renderPendingWidget({
+            jobId: 'test-job-listener-1',
+            timestamp: Date.now(),
+            fields: mExt
+          });
+          const widgetEl = document.getElementById('dice-floating-automation-bar');
+          assert(widgetEl !== null, 'TEST W: DiceTabListener floating widget rendered successfully');
+
+          // Ensure clicking Inspect Category does not throw ReferenceError
+          const inspectBtn = widgetEl.querySelector('#dice-bar-run-inspect');
+          assert(inspectBtn !== null, 'TEST W: Inspect button found on widget');
+          let inspectThrew = false;
+          try {
+            inspectBtn.click();
+          } catch (e) {
+            inspectThrew = true;
+          }
+          assert(!inspectThrew, 'TEST W: Inspect button click did NOT throw ReferenceError: Utils is not defined');
+          widgetEl.remove();
+        }
+
         log('\n==================================================');
-        log('🎉 ALL TESTS (TESTS A-V) PASSED SUCCESSFULLY!');
+        log('🎉 ALL TESTS (TESTS A-W) PASSED SUCCESSFULLY!');
         log('==================================================');
 
         document.getElementById('suite-status').className = 'status-badge badge-pass';

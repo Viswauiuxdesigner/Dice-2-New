@@ -4263,16 +4263,20 @@
       this.renderPendingWidget(job);
 
       if (isLiveEvent) {
-        const targetDoc = Utils.getEffectiveDocument(document);
-        if (job.action === 'dryrun') {
-          await DiceAutomator.runDryRun(targetDoc, job.fields || {}, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-        } else {
-          const res = await DiceAutomator.fillForm(targetDoc, job, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-          this.updateWidgetStatus(res);
+        try {
+          if (job.action === 'dryrun') {
+            await DiceAutomator.runDryRun(document, job.fields || {}, {
+              logCallback: (m) => this.logToWidget(m)
+            });
+          } else {
+            const res = await DiceAutomator.fillForm(document, job, {
+              logCallback: (m) => this.logToWidget(m)
+            });
+            this.updateWidgetStatus(res);
+          }
+        } catch (error) {
+          this.logToWidget(`❌ Runtime error: ${error.message}`);
+          console.error('[DICE AUTO-FILL]', error);
         }
       }
     },
@@ -4344,30 +4348,42 @@
 
       widget.querySelector('#dice-bar-close').onclick = () => widget.remove();
       widget.querySelector('#dice-bar-run-autofill').onclick = async () => {
-        this.logToWidget('Starting auto-fill sequence...');
-        const targetDoc = Utils.getEffectiveDocument(document);
-        const res = await DiceAutomator.fillForm(targetDoc, job, {
-          logCallback: (m) => this.logToWidget(m)
-        });
-        this.updateWidgetStatus(res);
+        try {
+          this.logToWidget('Starting auto-fill sequence...');
+          const res = await DiceAutomator.fillForm(document, job, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+          this.updateWidgetStatus(res);
+        } catch (error) {
+          this.logToWidget(`❌ Runtime error: ${error.message}`);
+          console.error('[DICE AUTO-FILL]', error);
+        }
       };
       widget.querySelector('#dice-bar-run-dryrun').onclick = async () => {
-        this.logToWidget('Starting dry-run inspection...');
-        const targetDoc = Utils.getEffectiveDocument(document);
-        await DiceAutomator.runDryRun(targetDoc, job.fields || {}, {
-          logCallback: (m) => this.logToWidget(m)
-        });
+        try {
+          this.logToWidget('Starting dry-run inspection...');
+          await DiceAutomator.runDryRun(document, job.fields || {}, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+        } catch (error) {
+          this.logToWidget(`❌ Runtime error: ${error.message}`);
+          console.error('[DICE DRY-RUN]', error);
+        }
       };
       widget.querySelector('#dice-bar-run-inspect').onclick = () => {
-        const logEl = widget.querySelector('#dice-bar-log');
-        if (logEl) {
-          logEl.style.display = 'block';
-          logEl.textContent = '';
+        try {
+          const logEl = widget.querySelector('#dice-bar-log');
+          if (logEl) {
+            logEl.style.display = 'block';
+            logEl.textContent = '';
+          }
+          DiceAutomator.runCategoryDomDiagnostic(document, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+        } catch (error) {
+          this.logToWidget(`❌ Runtime error: ${error.message}`);
+          console.error('[DICE INSPECT]', error);
         }
-        const targetDoc = Utils.getEffectiveDocument(document);
-        DiceAutomator.runCategoryDomDiagnostic(targetDoc, {
-          logCallback: (m) => this.logToWidget(m)
-        });
       };
     },
 
