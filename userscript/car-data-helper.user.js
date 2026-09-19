@@ -3012,8 +3012,10 @@
           }
         } catch (e) {}
       },
-      triggerCategoryEvents(el, level = 0, doc = document) {
+      triggerCategoryEvents(el, level = 0, doc = document, optionValue = null) {
         if (!el) return;
+        const actualVal = optionValue !== null && optionValue !== undefined ? optionValue : el.value;
+
         try {
           el.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true, composed: true }));
           el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
@@ -3035,23 +3037,23 @@
         for (const win of pageWins) {
           try {
             if (typeof win.getsubcat === 'function') {
-              try { win.getsubcat(el.value, level); } catch (e) {}
-              try { win.getsubcat(el.value); } catch (e) {}
+              try { win.getsubcat(actualVal, level); } catch (e) {}
+              try { win.getsubcat(actualVal); } catch (e) {}
             }
             if (typeof win.get_sub_cat === 'function') {
-              try { win.get_sub_cat(el.value, level); } catch (e) {}
+              try { win.get_sub_cat(actualVal, level); } catch (e) {}
             }
             if (typeof win.getSubCategories === 'function') {
-              try { win.getSubCategories(el.value, level); } catch (e) {}
+              try { win.getSubCategories(actualVal, level); } catch (e) {}
             }
             if (typeof win.getCategoryFields === 'function') {
-              try { win.getCategoryFields(el.value); } catch (e) {}
+              try { win.getCategoryFields(actualVal); } catch (e) {}
             }
           } catch (e) {}
           try {
             const $ = win.$ || win.jQuery;
             if ($ && typeof $(el).trigger === 'function') {
-              $(el).trigger('input').trigger('change').trigger('chosen:updated').trigger('select2:select');
+              $(el).trigger('chosen:updated').trigger('liszt:updated').trigger('input').trigger('change').trigger('select2:select');
             }
           } catch (e) {}
           try {
@@ -3069,15 +3071,19 @@
             const scriptEl = targetDoc.createElement('script');
             const elId = el.id ? JSON.stringify(el.id) : 'null';
             const elName = el.name ? JSON.stringify(el.name) : 'null';
-            const valStr = JSON.stringify(el.value);
+            const valStr = JSON.stringify(actualVal);
             const lvlNum = typeof level === 'number' ? level : 0;
             scriptEl.textContent = `(function() {
               try {
                 var target = null;
                 if (${elId}) target = document.getElementById(${elId});
-                if (!target && ${elName}) target = document.querySelector('select[name=' + ${elName} + ']');
+                if (!target && ${elName}) {
+                  var formScope = document.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || document;
+                  target = formScope.querySelector('select[name=' + ${elName} + ']');
+                }
                 if (!target) {
-                  var allCats = document.querySelectorAll('select[name="parent_id[]"], select[name="category"], select[name="sub_category"], select[name="third_category"], .jomcl-category');
+                  var formScope = document.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || document;
+                  var allCats = formScope.querySelectorAll('select[name="parent_id[]"], select[name="category"], select[name="sub_category"], select[name="third_category"], .jomcl-category');
                   if (allCats && allCats[${lvlNum}]) target = allCats[${lvlNum}];
                 }
                 if (target) {
@@ -3087,6 +3093,11 @@
                   }
                   var ev = new Event('change', { bubbles: true, cancelable: true });
                   target.dispatchEvent(ev);
+                  if (typeof window.jQuery === 'function') {
+                    try {
+                      window.jQuery(target).trigger('chosen:updated').trigger('liszt:updated').trigger('change');
+                    } catch(e) {}
+                  }
                 }
                 if (typeof window.getsubcat === 'function') {
                   try { window.getsubcat(${valStr}, ${lvlNum}); } catch(e) {}
@@ -3094,9 +3105,6 @@
                 }
                 if (typeof window.get_sub_cat === 'function') {
                   try { window.get_sub_cat(${valStr}, ${lvlNum}); } catch(e) {}
-                }
-                if (typeof window.jQuery === 'function' && target) {
-                  try { window.jQuery(target).trigger('change'); } catch(e) {}
                 }
               } catch(err) {}
             })();`;
@@ -3128,36 +3136,48 @@
         return false;
       },
 
+      getListingForm(doc) {
+        if (!doc) doc = document;
+        return doc.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || doc;
+      },
+
       getCategorySelect(doc, level = 0) {
         if (!doc) doc = document;
+        const form = this.getListingForm(doc);
+
         if (level === 0) {
-          return doc.querySelector('#category') ||
-                 doc.querySelector('#target_category') ||
-                 doc.querySelector('#jform_category') ||
-                 doc.querySelector('select[name="category"]') ||
-                 doc.querySelector('#category_div select') ||
-                 doc.querySelectorAll('select[name="parent_id[]"]')[0] ||
-                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[0] ||
+          return form.querySelector('#parent_id_0') ||
+                 form.querySelector('#category') ||
+                 form.querySelector('#target_category') ||
+                 form.querySelector('#category_div select') ||
+                 form.querySelector('select#catid') ||
+                 form.querySelector('select[name="catid"]') ||
+                 form.querySelector('select[name="category"]') ||
+                 form.querySelector('#jform_category') ||
+                 form.querySelectorAll('select[name="parent_id[]"]')[0] ||
+                 form.querySelectorAll('.jomcl-category')[0] ||
                  null;
         } else if (level === 1) {
-          return doc.querySelector('#sub_category') ||
-                 doc.querySelector('#target_sub_category') ||
-                 doc.querySelector('#target_cars_parts') ||
-                 doc.querySelector('select[name="sub_category"]') ||
-                 doc.querySelector('#sub_category_div select') ||
-                 doc.querySelector('#cat_id_2') ||
-                 doc.querySelectorAll('select[name="parent_id[]"]')[1] ||
-                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[1] ||
+          return form.querySelector('#parent_id_1') ||
+                 form.querySelector('#sub_category') ||
+                 form.querySelector('#target_sub_category') ||
+                 form.querySelector('#target_cars_parts') ||
+                 form.querySelector('#sub_category_div select') ||
+                 form.querySelector('#cat_id_2') ||
+                 form.querySelector('select[name="sub_category"]') ||
+                 form.querySelectorAll('select[name="parent_id[]"]')[1] ||
+                 form.querySelectorAll('.jomcl-category')[1] ||
                  null;
         } else if (level === 2) {
-          return doc.querySelector('#sub_sub_category') ||
-                 doc.querySelector('#target_used_cars_sa') ||
-                 doc.querySelector('#third_category') ||
-                 doc.querySelector('select[name="third_category"]') ||
-                 doc.querySelector('#sub_sub_category_div select') ||
-                 doc.querySelector('#cat_id_3') ||
-                 doc.querySelectorAll('select[name="parent_id[]"]')[2] ||
-                 doc.querySelectorAll('.jomcl-category, select[name*="cat"]')[2] ||
+          return form.querySelector('#parent_id_2') ||
+                 form.querySelector('#sub_sub_category') ||
+                 form.querySelector('#target_used_cars_sa') ||
+                 form.querySelector('#third_category') ||
+                 form.querySelector('#sub_sub_category_div select') ||
+                 form.querySelector('#cat_id_3') ||
+                 form.querySelector('select[name="third_category"]') ||
+                 form.querySelectorAll('select[name="parent_id[]"]')[2] ||
+                 form.querySelectorAll('.jomcl-category')[2] ||
                  null;
         }
         return null;
@@ -3197,8 +3217,11 @@
         const search = Utils.cleanText(String(targetMatcher)).toLowerCase();
         let matched = options.find(o => o.text.toLowerCase() === search);
         if (!matched) matched = options.find(o => o.value.toLowerCase() === search);
+        if (!matched) matched = options.find(o => {
+          const t = o.text.toLowerCase();
+          return t.startsWith(search) || t.endsWith(search) || t.includes(` ${search} `);
+        });
         if (!matched) matched = options.find(o => o.text.toLowerCase().includes(search));
-        if (!matched) matched = options.find(o => search.includes(o.text.toLowerCase()) && o.text.length > 2);
         if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
         return matched || null;
       },
@@ -3217,6 +3240,7 @@
               level: level
             };
           }
+          return null;
         }
         return this.findDropdownWithOption(doc, targetMatcher, fallbackCriteria);
       },
@@ -3233,11 +3257,13 @@
 
       findDropdownWithOption(doc, targetMatcher, criteria = {}) {
         if (!doc) doc = document;
+        const form = this.getListingForm(doc);
+
         const candidates = [];
         if (criteria.selectors) {
           for (const sel of criteria.selectors) {
             try {
-              const els = doc.querySelectorAll(sel);
+              const els = form.querySelectorAll(sel);
               els.forEach(el => {
                 if (this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
               });
@@ -3245,7 +3271,7 @@
           }
         }
         if (criteria.labels) {
-          const allLabels = doc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, div.control-label, th');
+          const allLabels = form.querySelectorAll('label, .control-label, .form-label, span.hasPopover, div.control-label, th');
           for (const lbl of allLabels) {
             const lText = Utils.cleanText((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || ''));
             for (const targetLabel of criteria.labels) {
@@ -3255,7 +3281,7 @@
               if (matches) {
                 const forId = lbl.getAttribute('for');
                 if (forId) {
-                  const el = doc.getElementById(forId) || doc.querySelector('#' + CSS.escape(forId));
+                  const el = form.querySelector('#' + CSS.escape(forId)) || (doc.getElementById ? doc.getElementById(forId) : null);
                   if (el && this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
                 }
                 const inside = lbl.querySelector('select, [role="combobox"], .chosen-container, .select2-container');
@@ -3273,15 +3299,15 @@
         if (criteria.names) {
           for (const name of criteria.names) {
             try {
-              const els = doc.querySelectorAll(`select[name="${name}"], select[id="${name}"], select[name*="${name}"], select[id*="${name}"]`);
+              const els = form.querySelectorAll(`select[name="${name}"], select[id="${name}"], select[name*="${name}"], select[id*="${name}"]`);
               els.forEach(el => {
                 if (this.isValidSelectElement(el) && !candidates.includes(el)) candidates.push(el);
               });
             } catch (e) {}
           }
         }
-        const allSelects = doc.querySelectorAll('select, [role="combobox"], .chosen-container, .select2-container');
-        allSelects.forEach(el => {
+        const formSelects = form.querySelectorAll('select, [role="combobox"], .chosen-container, .select2-container');
+        formSelects.forEach(el => {
           if (!candidates.includes(el)) candidates.push(el);
         });
 
@@ -3307,6 +3333,14 @@
 
       selectAndVerify(control, targetValueOrText, level = null, doc = null) {
         if (!control) return { success: false, error: 'No dropdown control provided' };
+
+        if (control.classList && (control.classList.contains('chosen-container') || control.classList.contains('select2-container'))) {
+          const nativeSelect = control.parentElement?.querySelector('select') || control.previousElementSibling;
+          if (nativeSelect && nativeSelect.tagName === 'SELECT') {
+            return this.selectAndVerify(nativeSelect, targetValueOrText, level, doc);
+          }
+        }
+
         const options = this.getOptions(control);
         if (options.length === 0) return { success: false, error: 'Dropdown has no options' };
 
@@ -3325,9 +3359,15 @@
           if (matched.element) matched.element.selected = true;
 
           if (typeof level === 'number') {
-            Utils.triggerCategoryEvents(control, level, doc || control.ownerDocument || document);
+            Utils.triggerCategoryEvents(control, level, doc || control.ownerDocument || document, matched.value);
           } else {
             Utils.triggerEvents(control);
+          }
+
+          const chosenSpan = control.parentElement?.querySelector('.chosen-container .chosen-single span, .chosen-container a span') ||
+                             (control.id ? (control.ownerDocument || doc || document).querySelector(`#${control.id}_chzn .chosen-single span`) : null);
+          if (chosenSpan) {
+            chosenSpan.textContent = matched.text;
           }
 
           const actualIndex = control.selectedIndex;
@@ -3335,14 +3375,13 @@
           const actualText = actualOption ? Utils.cleanText(actualOption.text) : '';
           const actualValue = control.value;
 
-          const isVerified = (actualValue === matched.value) ||
-                             (actualText.toLowerCase() === matched.text.toLowerCase()) ||
-                             (actualText.toLowerCase().includes(matched.text.toLowerCase()));
+          const isVerified = (actualValue === matched.value) &&
+                             (actualText.toLowerCase() === matched.text.toLowerCase() || actualText.toLowerCase().includes(matched.text.toLowerCase()));
 
           if (!isVerified) {
             return {
               success: false,
-              error: `Selection verification failed. Expected "${matched.text}", actual selected: "${actualText}"`,
+              error: `Selection verification failed. Expected text "${matched.text}" with value "${matched.value}", actual selected: text "${actualText}", value "${actualValue}"`,
               selectedText: actualText,
               selectedValue: actualValue
             };
