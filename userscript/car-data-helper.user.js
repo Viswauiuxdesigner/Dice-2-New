@@ -24,8 +24,13 @@
 (function () {
   'use strict';
 
+  const BUILD_COMMIT = '222ce6a';
   const SCRIPT_VERSION = '2.3.0-DICE2';
   const BUILD_TIMESTAMP = '2026-09-19 10:20 UTC';
+
+  console.log(`[DICE 2 BUILD] ${BUILD_COMMIT}`);
+  console.log(`[DICE 2 VERSION] ${SCRIPT_VERSION}`);
+  console.log(`[DICE 2 BUILD TIME] ${BUILD_TIMESTAMP}`);
 
   // --- 1. NORMALIZERS ENGINE ---
   const Normalizers = {
@@ -4079,9 +4084,14 @@
       `;
 
       widget.innerHTML = `
-        <div style="background: #1e293b; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155;">
-          <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8;">
-            <span>🚗</span> DICE Form Automator
+        <div style="background: #1e293b; padding: 8px 12px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #334155;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8;">
+              <span>🚗</span> DICE Form Automator
+            </div>
+            <div style="font-size: 10px; color: #94a3b8; font-family: monospace; line-height: 1.3; margin-top: 3px;">
+              BUILD: ${BUILD_COMMIT}<br>VERSION: ${SCRIPT_VERSION}
+            </div>
           </div>
           <button id="dice-bar-close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px;">✕</button>
         </div>
