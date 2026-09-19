@@ -994,6 +994,149 @@
     },
 
     /**
+     * Inspects and logs detailed diagnostics on all select elements, iframes, and shadow roots in the document.
+     * Purely diagnostic — performs ZERO DOM mutations or dropdown events.
+     */
+    runCategoryDomDiagnostic(targetDoc, options = {}) {
+      if (!targetDoc) targetDoc = document;
+      const opts = Object.assign({}, options);
+      const log = (msg) => {
+        if (typeof opts.logCallback === 'function') opts.logCallback(msg);
+        console.log(msg);
+      };
+
+      log('========================================');
+      log('🔎 CATEGORY DOM DIAGNOSTIC');
+      log(`URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`);
+      log(`Time: ${new Date().toISOString()}`);
+      log('========================================\n');
+
+      // 1. Core High-Level Candidates
+      const parentId0 = targetDoc.getElementById('parent_id_0');
+      const adminForm = targetDoc.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm');
+      const parentIdSelects = targetDoc.querySelectorAll('select[name="parent_id[]"]');
+      const jomclCategorySelects = targetDoc.querySelectorAll('select.jomcl-category');
+      const catDiv = targetDoc.getElementById('category_div');
+
+      log('CATEGORY MATCH CANDIDATES');
+      log(`#parent_id_0 = ${parentId0 ? 'FOUND' : 'NOT FOUND'}`);
+      log(`form#adminForm = ${adminForm ? `FOUND (id: "${adminForm.id || ''}", name: "${adminForm.name || ''}", action: "${adminForm.getAttribute('action') || ''}")` : 'NOT FOUND'}`);
+      log(`select[name="parent_id[]"] = ${parentIdSelects.length} elements`);
+      log(`select.jomcl-category = ${jomclCategorySelects.length} elements`);
+      log(`#category_div = ${catDiv ? 'FOUND' : 'NOT FOUND'}`);
+      if (catDiv) {
+        log(`  #category_div innerHTML snippet: ${(catDiv.innerHTML || '').slice(0, 250).replace(/\\s+/g, ' ')}...`);
+      }
+      log('');
+
+      // 2. Specific Query Patterns & outerHTML
+      const queryPatterns = [
+        'select[name="parent_id[]"]',
+        'select.jomcl-category',
+        '#parent_id_0',
+        'select[name*="cat"]',
+        'select[id*="cat"]',
+        'select[name*="category"]',
+        'select[id*="category"]',
+        '.chosen-container'
+      ];
+
+      log('--- PATTERN QUERY RESULTS ---');
+      for (const q of queryPatterns) {
+        try {
+          const matches = targetDoc.querySelectorAll(q);
+          log(`Query: "${q}" → ${matches.length} elements`);
+          matches.forEach((el, idx) => {
+            const outer = (el.outerHTML || '').slice(0, 350).replace(/\\s+/g, ' ');
+            log(`  [${idx}] <${(el.tagName || '').toLowerCase()}> id="${el.id || ''}" name="${el.name || ''}" class="${el.className || ''}"`);
+            log(`      outerHTML: ${outer}...`);
+          });
+        } catch (e) {
+          log(`Query "${q}" → ERROR: ${e.message}`);
+        }
+      }
+      log('');
+
+      // 3. Enumerate ALL <select> Elements
+      const allSelects = Array.from(targetDoc.querySelectorAll('select'));
+      log(`--- ALL <SELECT> ELEMENTS (${allSelects.length} total) ---`);
+
+      allSelects.forEach((sel, idx) => {
+        const parentForm = sel.closest('form');
+        const parentContainer = sel.parentElement;
+        const computed = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(sel) : null;
+        const isVisible = computed ? (computed.display !== 'none' && computed.visibility !== 'hidden') : true;
+
+        log(`\nSelect #${idx}:`);
+        log(`  id: "${sel.id || ''}"`);
+        log(`  name: "${sel.name || ''}"`);
+        log(`  class: "${sel.className || ''}"`);
+        log(`  type: "${sel.type || ''}"`);
+        log(`  disabled: ${sel.disabled}`);
+        log(`  visible: ${isVisible} (display: ${computed?.display || '?'}, visibility: ${computed?.visibility || '?'})`);
+        log(`  nearest form: ${parentForm ? `<form id="${parentForm.id || ''}" name="${parentForm.name || ''}">` : 'NONE (outside form)'}`);
+        log(`  parent/container: <${(parentContainer?.tagName || '').toLowerCase()} id="${parentContainer?.id || ''}" class="${parentContainer?.className || ''}">`);
+        log(`  selectedIndex: ${sel.selectedIndex}`);
+        log(`  options count: ${sel.options ? sel.options.length : 0}`);
+
+        if (sel.options && sel.options.length > 0) {
+          log('  options:');
+          Array.from(sel.options).forEach((opt, oIdx) => {
+            const cleanT = (opt.text || '').replace(/\\s+/g, ' ').trim();
+            log(`    [${oIdx}] text="${cleanT}" value="${opt.value}" selected=${opt.selected}`);
+          });
+        } else {
+          log('    [NO OPTIONS PRESENT IN SELECT]');
+        }
+
+        const outer = (sel.outerHTML || '').slice(0, 350).replace(/\\s+/g, ' ');
+        log(`  outerHTML: ${outer}...`);
+      });
+      log('');
+
+      // 4. Inspect Iframes
+      const allIframes = Array.from(targetDoc.querySelectorAll('iframe'));
+      log(`--- IFRAMES (${allIframes.length} total) ---`);
+      allIframes.forEach((ifr, idx) => {
+        log(`  Iframe #${idx}: id="${ifr.id || ''}" name="${ifr.name || ''}" src="${ifr.src || ''}"`);
+        try {
+          if (ifr.contentDocument) {
+            const innerSelects = ifr.contentDocument.querySelectorAll('select');
+            log(`    → accessible contentDocument contains ${innerSelects.length} <select> elements`);
+          }
+        } catch (e) {
+          log(`    → contentDocument cross-origin restricted (${e.message})`);
+        }
+      });
+      log('');
+
+      // 5. Inspect Shadow Roots
+      log('--- SHADOW ROOTS INSPECTION ---');
+      let shadowCount = 0;
+      targetDoc.querySelectorAll('*').forEach(el => {
+        if (el.shadowRoot) {
+          shadowCount++;
+          log(`  Shadow root found on: <${(el.tagName || '').toLowerCase()} id="${el.id || ''}" class="${el.className || ''}">`);
+        }
+      });
+      if (shadowCount === 0) {
+        log('  No shadow roots detected on document elements.');
+      }
+
+      log('\n========================================');
+      log('🏁 DIAGNOSTIC COMPLETE');
+      log('========================================');
+
+      return {
+        success: true,
+        selectCount: allSelects.length,
+        iframeCount: allIframes.length,
+        hasAdminForm: !!adminForm,
+        hasParentId0: !!parentId0
+      };
+    },
+
+    /**
      * Executes the live, non-destructive automatic form-filling sequence with strict verification at every step.
      */
     async fillForm(targetDoc, extractedData, options = {}) {

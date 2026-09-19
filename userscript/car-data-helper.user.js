@@ -3687,6 +3687,149 @@
         return { success: true, isDryRun: true, checks };
       },
 
+      /**
+       * Inspects and logs detailed diagnostics on all select elements, iframes, and shadow roots in the document.
+       * Purely diagnostic — performs ZERO DOM mutations or dropdown events.
+       */
+      runCategoryDomDiagnostic(targetDoc, options = {}) {
+        if (!targetDoc) targetDoc = document;
+        const opts = Object.assign({}, options);
+        const log = (msg) => {
+          if (typeof opts.logCallback === 'function') opts.logCallback(msg);
+          console.log(msg);
+        };
+
+        log('========================================');
+        log('🔎 CATEGORY DOM DIAGNOSTIC');
+        log(`URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`);
+        log(`Time: ${new Date().toISOString()}`);
+        log('========================================\n');
+
+        // 1. Core High-Level Candidates
+        const parentId0 = targetDoc.getElementById('parent_id_0');
+        const adminForm = targetDoc.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm');
+        const parentIdSelects = targetDoc.querySelectorAll('select[name="parent_id[]"]');
+        const jomclCategorySelects = targetDoc.querySelectorAll('select.jomcl-category');
+        const catDiv = targetDoc.getElementById('category_div');
+
+        log('CATEGORY MATCH CANDIDATES');
+        log(`#parent_id_0 = ${parentId0 ? 'FOUND' : 'NOT FOUND'}`);
+        log(`form#adminForm = ${adminForm ? `FOUND (id: "${adminForm.id || ''}", name: "${adminForm.name || ''}", action: "${adminForm.getAttribute('action') || ''}")` : 'NOT FOUND'}`);
+        log(`select[name="parent_id[]"] = ${parentIdSelects.length} elements`);
+        log(`select.jomcl-category = ${jomclCategorySelects.length} elements`);
+        log(`#category_div = ${catDiv ? 'FOUND' : 'NOT FOUND'}`);
+        if (catDiv) {
+          log(`  #category_div innerHTML snippet: ${(catDiv.innerHTML || '').slice(0, 250).replace(/\\s+/g, ' ')}...`);
+        }
+        log('');
+
+        // 2. Specific Query Patterns & outerHTML
+        const queryPatterns = [
+          'select[name="parent_id[]"]',
+          'select.jomcl-category',
+          '#parent_id_0',
+          'select[name*="cat"]',
+          'select[id*="cat"]',
+          'select[name*="category"]',
+          'select[id*="category"]',
+          '.chosen-container'
+        ];
+
+        log('--- PATTERN QUERY RESULTS ---');
+        for (const q of queryPatterns) {
+          try {
+            const matches = targetDoc.querySelectorAll(q);
+            log(`Query: "${q}" → ${matches.length} elements`);
+            matches.forEach((el, idx) => {
+              const outer = (el.outerHTML || '').slice(0, 350).replace(/\\s+/g, ' ');
+              log(`  [${idx}] <${(el.tagName || '').toLowerCase()}> id="${el.id || ''}" name="${el.name || ''}" class="${el.className || ''}"`);
+              log(`      outerHTML: ${outer}...`);
+            });
+          } catch (e) {
+            log(`Query "${q}" → ERROR: ${e.message}`);
+          }
+        }
+        log('');
+
+        // 3. Enumerate ALL <select> Elements
+        const allSelects = Array.from(targetDoc.querySelectorAll('select'));
+        log(`--- ALL <SELECT> ELEMENTS (${allSelects.length} total) ---`);
+
+        allSelects.forEach((sel, idx) => {
+          const parentForm = sel.closest('form');
+          const parentContainer = sel.parentElement;
+          const computed = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(sel) : null;
+          const isVisible = computed ? (computed.display !== 'none' && computed.visibility !== 'hidden') : true;
+
+          log(`\nSelect #${idx}:`);
+          log(`  id: "${sel.id || ''}"`);
+          log(`  name: "${sel.name || ''}"`);
+          log(`  class: "${sel.className || ''}"`);
+          log(`  type: "${sel.type || ''}"`);
+          log(`  disabled: ${sel.disabled}`);
+          log(`  visible: ${isVisible} (display: ${computed?.display || '?'}, visibility: ${computed?.visibility || '?'})`);
+          log(`  nearest form: ${parentForm ? `<form id="${parentForm.id || ''}" name="${parentForm.name || ''}">` : 'NONE (outside form)'}`);
+          log(`  parent/container: <${(parentContainer?.tagName || '').toLowerCase()} id="${parentContainer?.id || ''}" class="${parentContainer?.className || ''}">`);
+          log(`  selectedIndex: ${sel.selectedIndex}`);
+          log(`  options count: ${sel.options ? sel.options.length : 0}`);
+
+          if (sel.options && sel.options.length > 0) {
+            log('  options:');
+            Array.from(sel.options).forEach((opt, oIdx) => {
+              const cleanT = (opt.text || '').replace(/\\s+/g, ' ').trim();
+              log(`    [${oIdx}] text="${cleanT}" value="${opt.value}" selected=${opt.selected}`);
+            });
+          } else {
+            log('    [NO OPTIONS PRESENT IN SELECT]');
+          }
+
+          const outer = (sel.outerHTML || '').slice(0, 350).replace(/\\s+/g, ' ');
+          log(`  outerHTML: ${outer}...`);
+        });
+        log('');
+
+        // 4. Inspect Iframes
+        const allIframes = Array.from(targetDoc.querySelectorAll('iframe'));
+        log(`--- IFRAMES (${allIframes.length} total) ---`);
+        allIframes.forEach((ifr, idx) => {
+          log(`  Iframe #${idx}: id="${ifr.id || ''}" name="${ifr.name || ''}" src="${ifr.src || ''}"`);
+          try {
+            if (ifr.contentDocument) {
+              const innerSelects = ifr.contentDocument.querySelectorAll('select');
+              log(`    → accessible contentDocument contains ${innerSelects.length} <select> elements`);
+            }
+          } catch (e) {
+            log(`    → contentDocument cross-origin restricted (${e.message})`);
+          }
+        });
+        log('');
+
+        // 5. Inspect Shadow Roots
+        log('--- SHADOW ROOTS INSPECTION ---');
+        let shadowCount = 0;
+        targetDoc.querySelectorAll('*').forEach(el => {
+          if (el.shadowRoot) {
+            shadowCount++;
+            log(`  Shadow root found on: <${(el.tagName || '').toLowerCase()} id="${el.id || ''}" class="${el.className || ''}">`);
+          }
+        });
+        if (shadowCount === 0) {
+          log('  No shadow roots detected on document elements.');
+        }
+
+        log('\n========================================');
+        log('🏁 DIAGNOSTIC COMPLETE');
+        log('========================================');
+
+        return {
+          success: true,
+          selectCount: allSelects.length,
+          iframeCount: allIframes.length,
+          hasAdminForm: !!adminForm,
+          hasParentId0: !!parentId0
+        };
+      },
+
       async fillForm(targetDoc, extractedData, options = {}) {
         if (!targetDoc) targetDoc = document;
         if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
@@ -4099,13 +4242,18 @@
           <div id="dice-bar-status-text" style="color: #4ade80; font-weight: 700; margin-bottom: 4px;">Vehicle data received ✓</div>
           <div style="font-weight: 600; color: #f8fafc; word-break: break-word;">${title}</div>
           ${price ? `<div style="color: #94a3b8; font-size: 11px;">Price: ${price}</div>` : ''}
-          <div id="dice-bar-log" style="margin-top: 8px; max-height: 80px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none;"></div>
-          <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; flex: 2;">
-              ⚡ Run Auto-Fill
-            </button>
-            <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 8px; border-radius: 4px; font-weight: 700; font-size: 10.5px; cursor: pointer; flex: 1;">
-              🧪 Dry-Run
+          <div id="dice-bar-log" style="margin-top: 8px; max-height: 220px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none; white-space: pre-wrap; user-select: text; -webkit-user-select: text;"></div>
+          <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; gap: 6px;">
+              <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; flex: 2;">
+                ⚡ Run Auto-Fill
+              </button>
+              <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 8px; border-radius: 4px; font-weight: 700; font-size: 10.5px; cursor: pointer; flex: 1;">
+                🧪 Dry-Run
+              </button>
+            </div>
+            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; width: 100%;">
+              🔎 INSPECT CATEGORY DOM
             </button>
           </div>
         </div>
@@ -4125,6 +4273,16 @@
       widget.querySelector('#dice-bar-run-dryrun').onclick = async () => {
         this.logToWidget('Starting dry-run inspection...');
         await DiceAutomator.runDryRun(document, job.fields || {}, {
+          logCallback: (m) => this.logToWidget(m)
+        });
+      };
+      widget.querySelector('#dice-bar-run-inspect').onclick = () => {
+        const logEl = widget.querySelector('#dice-bar-log');
+        if (logEl) {
+          logEl.style.display = 'block';
+          logEl.textContent = '';
+        }
+        DiceAutomator.runCategoryDomDiagnostic(document, {
           logCallback: (m) => this.logToWidget(m)
         });
       };
