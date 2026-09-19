@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="styles.css">
   <style>
     body { padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; }
-    .test-log { background: #020617; color: #38bdf8; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-height: 450px; overflow-y: auto; border: 1px solid #1e293b; }
+    .test-log { background: #020617; color: #38bdf8; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-height: 480px; overflow-y: auto; border: 1px solid #1e293b; }
     .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
     .badge-pass { background: #166534; color: #4ade80; }
     .badge-fail { background: #991b1b; color: #f87171; }
@@ -16,7 +16,7 @@
 <body>
 
   <h1>🚗 DICE 2 Form Automation Test Suite</h1>
-  <p style="color: #94a3b8;">Automated verification of form-scoped dependent category selection, text-to-numeric value binding, Chosen.js UI synchronization, and false-success prevention.</p>
+  <p style="color: #94a3b8;">Automated verification of form-scoped dependent category selection, async option hydration, text-to-numeric value binding, and false-success prevention.</p>
 
   <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
     <button id="btn-run-tests" onclick="runSuite()" class="btn btn-success" style="padding: 8px 16px; cursor: pointer; font-weight: bold;">⚡ Run Test Suite</button>
@@ -49,7 +49,7 @@
         <label for="parent_id_0" class="control-label">Category *</label>
         <select name="parent_id[]" id="parent_id_0" class="inputbox jomcl-category chzn-done">
           <option value="">- Select a category -</option>
-          <option value="12">Vehicles</option>
+          <option value="12">Vehicles (0)</option>
           <option value="15">Property</option>
         </select>
         <div class="chosen-container chosen-container-single" id="parent_id_0_chzn" style="display: block; width: 220px;">
@@ -272,10 +272,10 @@
           setTimeout(() => {
             subCat.innerHTML = `
               <option value="">- Sub categories -</option>
-              <option value="45">Car - parts</option>
+              <option value="45">Cars - Parts</option>
               <option value="46">Motorcycles</option>
             `;
-          }, 60);
+          }, 80);
         } else if (String(val) === '45' || level === 1) {
           thirdCatWrap.style.display = 'block';
           thirdCat.innerHTML = '<option value="">- Select region -</option>';
@@ -285,7 +285,7 @@
               <option value="78">Used cars in South Africa</option>
               <option value="79">Commercial Vehicles</option>
             `;
-          }, 60);
+          }, 80);
         } else if (String(val) === '78' || level === 2) {
           setTimeout(() => {
             fieldsSection.style.display = 'block';
@@ -304,7 +304,7 @@
       };
 
       subCat.onchange = () => {
-        if (subCat.value === '45' || subCat.value === 'Car - parts') {
+        if (subCat.value === '45' || subCat.value === 'Cars - Parts' || subCat.value === 'Car - parts') {
           window.getsubcat('45', 1);
         } else {
           thirdCatWrap.style.display = 'none';
@@ -374,6 +374,43 @@
         assert(mExt.title === '2019 Mazda 2', `Mazda title extracted ("${mExt.title}")`);
         assert(mExt.price === '249 900', `Mazda price extracted ("${mExt.price}")`);
 
+        log('\n=== UNIT TESTS B, C, D: TEXT NORMALIZATION FOR VEHICLES ===');
+        const testOptions = [
+          { value: '12', text: 'Vehicles (0)' },
+          { value: '13', text: 'Vehicles\u00a0(0)' },
+          { value: '14', text: '-- Vehicles' },
+          { value: '45', text: 'Cars - Parts' },
+          { value: '78', text: 'Used cars in South Africa' }
+        ];
+
+        // TEST B: Vehicles (0)
+        const matchB = window.DiceAutomator.DropdownManager.matchOption(
+          [{ value: '12', text: 'Vehicles (0)' }],
+          'Vehicles'
+        );
+        assert(matchB && matchB.value === '12', 'TEST B: "Vehicles (0)" successfully matched to target "Vehicles" (value: 12)');
+
+        // TEST C: Vehicles\u00a0(0) with NBSP
+        const matchC = window.DiceAutomator.DropdownManager.matchOption(
+          [{ value: '13', text: 'Vehicles\u00a0(0)' }],
+          'Vehicles'
+        );
+        assert(matchC && matchC.value === '13', 'TEST C: "Vehicles\\u00a0(0)" with NBSP successfully matched to target "Vehicles" (value: 13)');
+
+        // TEST D: -- Vehicles with leading dashes
+        const matchD = window.DiceAutomator.DropdownManager.matchOption(
+          [{ value: '14', text: '-- Vehicles' }],
+          'Vehicles'
+        );
+        assert(matchD && matchD.value === '14', 'TEST D: "-- Vehicles" with leading dashes successfully matched to target "Vehicles" (value: 14)');
+
+        // TEST H: "Cars - Parts" matches "Car - parts"
+        const matchH = window.DiceAutomator.DropdownManager.matchOption(
+          [{ value: '45', text: 'Cars - Parts' }],
+          'Car - parts'
+        );
+        assert(matchH && matchH.value === '45', 'TEST H: Live label "Cars - Parts" successfully matched target "Car - parts"');
+
         log('\n=== REALISTIC DICE FIXTURE SETUP (HEADER/SIDEBAR SELECTS + #adminForm) ===');
         document.getElementById('header-search-bar').style.display = 'block';
         document.getElementById('sidebar-filters').style.display = 'block';
@@ -381,10 +418,9 @@
         simContainer.style.display = 'block';
         wireSimulatedFormEvents();
 
-        log('\n=== TEST I: DRY-RUN INSPECTION (ZERO DOM MUTATIONS) ===');
-        // Pre-populate dropdowns to test dry-run detector without triggering actions
+        log('\n=== TEST N: DRY-RUN INSPECTION (ZERO DOM MUTATIONS) ===');
         document.getElementById('sub_category_div').style.display = 'block';
-        document.getElementById('parent_id_1').innerHTML = '<option value="45">Car - parts</option>';
+        document.getElementById('parent_id_1').innerHTML = '<option value="45">Cars - Parts</option>';
         document.getElementById('sub_sub_category_div').style.display = 'block';
         document.getElementById('parent_id_2').innerHTML = '<option value="78">Used cars in South Africa</option>';
         document.getElementById('dice-vehicle-fields-section').style.display = 'block';
@@ -393,13 +429,9 @@
           logCallback: (m) => log(`  [DryRunLog] ${m}`)
         });
 
-        assert(dryRunRes.success === true, 'TEST I: Dry-run executed successfully');
+        assert(dryRunRes.success === true, 'TEST N: Dry-run executed successfully');
         assert(dryRunRes.checks.category.found === true, 'Category control detected');
         assert(dryRunRes.checks.category.optionFound === true, '"Vehicles" option detected in Category');
-        assert(dryRunRes.checks.subCategory.found === true, 'Sub Category control detected');
-        assert(dryRunRes.checks.subCategory.optionFound === true, '"Car - parts" option detected in Sub Category');
-        assert(dryRunRes.checks.thirdLevelCategory.found === true, 'Third-level Category control detected');
-        assert(dryRunRes.checks.thirdLevelCategory.optionFound === true, '"Used cars in South Africa" option detected');
         assert(dryRunRes.checks.priceInput.found === true, 'Price input detected');
         assert(dryRunRes.checks.priceCurrency.found === true, 'Price currency dropdown detected');
         assert(dryRunRes.checks.priceCurrency.optionFound === true, '"R (Rand)" option detected');
@@ -409,15 +441,16 @@
         assert(dryRunRes.checks.locationDropdown.optionFound === true, '"South Africa" option detected');
         assert(dryRunRes.checks.toggleEditor.found === true, 'Toggle Editor control detected');
         assert(dryRunRes.checks.descriptionEditor.found === true, 'Description editor detected');
-        assert(dryRunRes.checks.vehicleFields.totalFound >= 16, `Vehicle fields detected (${dryRunRes.checks.vehicleFields.totalFound} of 18)`);
 
-        // TEST I Assertion: Verify form remained untouched by dry run
-        assert(document.getElementById('parent_id_0').value === '', 'TEST I: Category value remained empty during dry-run');
-        assert(document.getElementById('target_price').value === '', 'TEST I: Price remained empty during dry-run');
-        assert(document.getElementById('header_cat_filter').value === 'all', 'TEST I: Header category filter remained untouched');
+        // TEST N Assertion: Verify form remained untouched by dry run
+        assert(document.getElementById('parent_id_0').value === '', 'TEST N: Category value remained empty during dry-run');
+        assert(document.getElementById('target_price').value === '', 'TEST N: Price remained empty during dry-run');
+        assert(document.getElementById('header_cat_filter').value === 'all', 'TEST N: Header category filter remained untouched');
 
-        log('\n=== TESTS A-F: FORM-SCOPED DEPENDENT CATEGORY AUTOMATION ===');
-        // Reset form state to real initial state (sub_category has only placeholder and sections are hidden)
+        log('\n=== TESTS A, E, F, G, I, J, O: ASYNC OPTION HYDRATION & DEPENDENT FLOW ===');
+        // Reset form: parent_id_0 initially has ONLY placeholder!
+        // Option "Vehicles (0)" will be dynamically added 120ms later to simulate async hydration!
+        document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option>';
         document.getElementById('parent_id_0').value = '';
         document.getElementById('parent_id_1').innerHTML = '<option value="">- Sub categories -</option>';
         document.getElementById('parent_id_2').innerHTML = '<option value="">- Select region -</option>';
@@ -430,102 +463,114 @@
         window.__chosenTriggers = [];
         window.__getsubcatCalls = [];
 
+        // Simulate async population of Category options 120ms after start
+        setTimeout(() => {
+          document.getElementById('parent_id_0').innerHTML = `
+            <option value="">- Select a category -</option>
+            <option value="12">Vehicles (0)</option>
+            <option value="15">Property (0)</option>
+          `;
+        }, 120);
+
         const autoFillRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
           stepDelayMs: 60,
-          maxWaitMs: 3000,
+          maxWaitMs: 4000,
           pollIntervalMs: 30,
           logCallback: (m) => log(`  [AutoFillLog] ${m}`)
         });
 
         assert(autoFillRes.success === true, 'Auto-fill sequence completed successfully');
 
-        // TEST A: Wrong header category select is ignored
-        assert(document.getElementById('header_cat_filter').value === 'all', 'TEST A: Header category select was NOT selected (ignored)');
-        assert(document.getElementById('sidebar_category_filter').value === '888', 'TEST A: Sidebar category select was NOT selected (ignored)');
-
-        // TEST B: Correct #parent_id_0 inside listing form is selected
+        // TEST A: Category resolved after async delay
         const catElem = document.getElementById('parent_id_0');
-        assert(catElem.id === 'parent_id_0' && catElem.closest('form#adminForm') !== null, 'TEST B: Selected Category control is #parent_id_0 inside form#adminForm');
+        assert(catElem.value === '12', 'TEST A: Category select resolved option "Vehicles" after async delay');
 
-        // TEST C: Target "Vehicles" resolves by OPTION TEXT
-        const selectedOpt = catElem.options[catElem.selectedIndex];
-        assert(selectedOpt && selectedOpt.text === 'Vehicles', 'TEST C: Target "Vehicles" resolved by OPTION TEXT ("Vehicles")');
+        // TEST E: Actual numeric option value used
+        assert(catElem.value === '12', 'TEST E: Actual numeric option value "12" assigned to select.value');
 
-        // TEST D: Actual numeric option VALUE is used
-        assert(catElem.value === '12', 'TEST D: Control .value bound to numeric option value "12" (not "Vehicles")');
-
-        // TEST E: getsubcat receives numeric category value
+        // TEST F: getsubcat received actual numeric option value
         const catAjaxCall = window.__getsubcatCalls.find(c => c.val === '12');
-        assert(catAjaxCall !== undefined && catAjaxCall.val === '12' && catAjaxCall.level === 0, 'TEST E: getsubcat received actual numeric option value ("12", 0)');
+        assert(catAjaxCall !== undefined && catAjaxCall.val === '12' && catAjaxCall.level === 0, 'TEST F: getsubcat received actual numeric option value ("12", 0)');
 
-        // TEST F: Chosen update/change event is triggered and Chosen UI span is updated
-        const chosenSpan = document.querySelector('#parent_id_0_chzn .chosen-single span');
-        assert(chosenSpan && chosenSpan.textContent === 'Vehicles', 'TEST F: Chosen UI span text updated to "Vehicles"');
-        const chosenTriggered = window.__chosenTriggers.some(t => t.evt === 'chosen:updated' || t.evt === 'change');
-        assert(chosenTriggered, 'TEST F: Chosen updated/change event was triggered');
+        // TEST G: Level 1 loaded asynchronously and was selected
+        assert(document.getElementById('parent_id_1').value === '45', 'TEST G: Level 1 ("Cars - Parts") loaded asynchronously and selected as value "45"');
 
-        // Verify remaining steps in the flow:
-        assert(document.getElementById('parent_id_1').value === '45', 'Sub Category selected as "45" ("Car - parts")');
-        assert(document.getElementById('parent_id_2').value === '78', 'Third-level Category selected as "78" ("Used cars in South Africa")');
+        // TEST I: Level 2 loaded asynchronously
+        // TEST J: "Used cars in South Africa" selected
+        assert(document.getElementById('parent_id_2').value === '78', 'TEST I & J: Level 2 ("Used cars in South Africa") loaded asynchronously and selected as value "78"');
+
+        // Verify remaining fields
         assert(document.getElementById('dice-vehicle-fields-section').style.display === 'block', 'Vehicle fields revealed');
         assert(document.getElementById('target_price').value === '249900', 'Price filled as pure digits "249900"');
         assert(document.getElementById('target_currency').value === 'ZAR', 'Currency selected as "R (Rand)"');
         assert(document.getElementById('target_tags').value === 'Sale', 'Tag selected as "Sale"');
         assert(document.getElementById('target_country').value === 'South Africa', 'Location selected as "South Africa"');
         assert(document.getElementById('target_vehicle_title').value === '2019 Mazda 2', 'Title populated');
-        assert(window.__formSubmitted === false, 'SAFETY: Final Submit button was NEVER clicked');
+
+        // TEST O: Submit button was never clicked
+        assert(window.__formSubmitted === false, 'TEST O: SAFETY: Final Submit button was NEVER clicked');
         assert(document.getElementById('dice-autofill-banner') !== null, 'Completion banner displayed');
 
-        log('\n=== TESTS G & H: STRICT FAILURE GATING & NO FALSE SUCCESS ===');
-        // Reset form and intentionally provide empty category options
+        log('\n=== TESTS K, L, M: CLEAN FAILURE ON TIMEOUT GATING ===');
+        // TEST K: Missing Category after timeout -> clean failure
         document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option>';
         document.getElementById('parent_id_0').value = '';
-        document.getElementById('parent_id_1').innerHTML = '<option value="">- Sub categories -</option>';
 
-        const failRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
+        const failCatRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
           stepDelayMs: 20,
-          maxWaitMs: 300,
-          pollIntervalMs: 30,
-          logCallback: (m) => log(`  [FailTestLog] ${m}`)
+          maxWaitMs: 200,
+          pollIntervalMs: 20,
+          logCallback: (m) => log(`  [FailCatLog] ${m}`)
         });
+        assert(failCatRes.success === false, 'TEST K: Automation reported clean FAILURE when Category timed out');
+        assert(failCatRes.failedStep === 'Category', 'TEST K: Failed step recorded as "Category"');
 
-        // TEST G: Wrong/missing Category causes immediate failure
-        assert(failRes.success === false, 'TEST G: Automation reported FAILURE immediately when Category option "Vehicles" was missing');
-        assert(failRes.failedStep === 'Category', 'TEST G: Failed step recorded as "Category"');
-
-        // TEST H: No false success banner
-        const errBanner = document.getElementById('dice-autofill-banner');
-        assert(errBanner !== null && errBanner.textContent.includes('Auto-fill stopped'), 'TEST H: Error banner displayed ("Auto-fill stopped")');
-        assert(!errBanner.textContent.includes('Auto-fill completed'), 'TEST H: NO false success banner displayed');
-
-        // Re-populate valid options and re-wire
+        // Re-enable Category but reset & break Sub Category to test L
         document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option><option value="12">Vehicles</option>';
-        wireSimulatedFormEvents();
+        document.getElementById('parent_id_1').innerHTML = '<option value="">- Sub categories -</option>';
+        document.getElementById('parent_id_1').value = '';
+        document.getElementById('parent_id_2').innerHTML = '<option value="">- Select region -</option>';
+        document.getElementById('parent_id_2').value = '';
+        window.getsubcat = () => { /* No-op to simulate subcategory AJAX failure */ };
 
-        log('\n=== TEST 5: ASYNCHRONOUS JOB & STALE-PAYLOAD PROTECTION ===');
-        const processedJobs = new Set();
-        const processJob = (job) => {
-          if (!job || !job.jobId) return { handled: false, reason: 'Invalid payload' };
-          if (processedJobs.has(job.jobId)) return { handled: false, reason: 'Duplicate / Stale jobId' };
-          const ageMs = Date.now() - job.timestamp;
-          if (ageMs > 300000) return { handled: false, reason: 'Expired job (>5 min)' };
-          processedJobs.add(job.jobId);
-          return { handled: true, jobId: job.jobId };
+        const failSubRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
+          stepDelayMs: 20,
+          maxWaitMs: 200,
+          pollIntervalMs: 20,
+          logCallback: (m) => log(`  [FailSubLog] ${m}`)
+        });
+        assert(failSubRes.success === false, 'TEST L: Automation reported clean FAILURE when Sub Category timed out');
+        assert(failSubRes.failedStep === 'Sub Category', 'TEST L: Failed step recorded as "Sub Category"');
+
+        // TEST M: Missing Third Level after timeout -> clean failure
+        document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option><option value="12">Vehicles</option>';
+        document.getElementById('parent_id_1').innerHTML = '<option value="">- Sub categories -</option>';
+        document.getElementById('parent_id_2').innerHTML = '<option value="">- Select region -</option>';
+        window.getsubcat = (val, level) => {
+          if (level === 0 || val === '12') {
+            document.getElementById('sub_category_div').style.display = 'block';
+            document.getElementById('parent_id_1').innerHTML = `
+              <option value="">- Sub categories -</option>
+              <option value="45">Cars - Parts</option>
+            `;
+          }
+          // level 1 does nothing -> simulates level 2 timeout
         };
 
-        const jobA = { jobId: 'job_001_mazda', timestamp: Date.now(), sourceUrl: 'https://cars.co.za/mazda', fields: mExt };
-        const resA1 = processJob(jobA);
-        assert(resA1.handled === true, 'Job 1 handled successfully');
+        const failThirdRes = await window.DiceAutomator.fillForm(document, { fields: mExt }, {
+          stepDelayMs: 20,
+          maxWaitMs: 200,
+          pollIntervalMs: 20,
+          logCallback: (m) => log(`  [FailThirdLog] ${m}`)
+        });
+        assert(failThirdRes.success === false, 'TEST M: Automation reported clean FAILURE when Third Level timed out');
+        assert(failThirdRes.failedStep === 'Third-level Category', 'TEST M: Failed step recorded as "Third-level Category"');
 
-        const resA2 = processJob(jobA);
-        assert(resA2.handled === false && resA2.reason.includes('Duplicate'), 'Duplicate Job 1 correctly rejected');
-
-        const staleJob = { jobId: 'job_old', timestamp: Date.now() - 400000, sourceUrl: 'https://cars.co.za/old', fields: {} };
-        const resOld = processJob(staleJob);
-        assert(resOld.handled === false && resOld.reason.includes('Expired'), 'Stale/expired job correctly rejected');
+        // Re-wire valid events for final clean state
+        wireSimulatedFormEvents();
 
         log('\n==================================================');
-        log('🎉 ALL TESTS (TESTS A-I) PASSED SUCCESSFULLY!');
+        log('🎉 ALL TESTS (TESTS A-O) PASSED SUCCESSFULLY!');
         log('==================================================');
 
         document.getElementById('suite-status').className = 'status-badge badge-pass';

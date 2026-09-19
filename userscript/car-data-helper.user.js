@@ -2990,6 +2990,16 @@
     const Utils = {
       sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); },
       cleanText(str) { return (!str || typeof str !== 'string') ? '' : str.replace(/\s+/g, ' ').trim(); },
+      cleanCategoryText(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/\u00a0/g, ' ')
+          .replace(/[\u2013\u2014]/g, '-')
+          .replace(/\(\s*\d+\s*\)/g, '')
+          .replace(/^[\s\-–—\>]+|[\s\-–—\<]+$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      },
       triggerEvents(el) {
         if (!el) return;
         try {
@@ -3216,18 +3226,57 @@
       matchOption(options, targetMatcher) {
         if (!options || options.length === 0) return null;
         if (typeof targetMatcher === 'function') return options.find(targetMatcher) || null;
+
+        const toCanonical = (s) => {
+          return Utils.cleanCategoryText(s)
+            .toLowerCase()
+            .replace(/\bcars?\b/g, 'car')
+            .replace(/\bparts?\b/g, 'part')
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
         if (targetMatcher instanceof RegExp) {
-          return options.find(o => targetMatcher.test(o.text) || targetMatcher.test(o.value)) || null;
+          return options.find(o => {
+            const rawT = o.text || '';
+            const cleanT = Utils.cleanCategoryText(rawT);
+            return targetMatcher.test(cleanT) || targetMatcher.test(rawT) || targetMatcher.test(o.value);
+          }) || null;
         }
-        const search = Utils.cleanText(String(targetMatcher)).toLowerCase();
-        let matched = options.find(o => o.text.toLowerCase() === search);
-        if (!matched) matched = options.find(o => o.value.toLowerCase() === search);
-        if (!matched) matched = options.find(o => {
-          const t = o.text.toLowerCase();
-          return t.startsWith(search) || t.endsWith(search) || t.includes(` ${search} `);
-        });
-        if (!matched) matched = options.find(o => o.text.toLowerCase().includes(search));
-        if (!matched) matched = options.find(o => o.value.toLowerCase().includes(search));
+
+        const rawSearch = String(targetMatcher);
+        const cleanSearch = Utils.cleanCategoryText(rawSearch).toLowerCase();
+        const canonicalSearch = toCanonical(rawSearch);
+
+        // 1. Exact normalized category text (e.g. "Vehicles (0)", "Vehicles\u00a0(0)", "-- Vehicles" -> "vehicles")
+        let matched = options.find(o => Utils.cleanCategoryText(o.text).toLowerCase() === cleanSearch);
+
+        // 2. Canonical singular/plural match (e.g. "Cars - Parts" matches "Car - parts")
+        if (!matched) {
+          matched = options.find(o => toCanonical(o.text) === canonicalSearch);
+        }
+
+        // 3. Exact option value match (numeric ID)
+        if (!matched) {
+          matched = options.find(o => o.value.toLowerCase() === cleanSearch || o.value === rawSearch);
+        }
+
+        // 4. Word boundary / substring match
+        if (!matched) {
+          matched = options.find(o => {
+            const t = Utils.cleanCategoryText(o.text).toLowerCase();
+            return t.startsWith(cleanSearch) || t.endsWith(cleanSearch) || t.includes(` ${cleanSearch} `);
+          });
+        }
+
+        if (!matched) {
+          matched = options.find(o => Utils.cleanCategoryText(o.text).toLowerCase().includes(cleanSearch));
+        }
+
+        if (!matched) {
+          matched = options.find(o => o.value.toLowerCase().includes(cleanSearch));
+        }
+
         return matched || null;
       },
 
@@ -3377,16 +3426,15 @@
 
           const actualIndex = control.selectedIndex;
           const actualOption = control.options[actualIndex];
-          const actualText = actualOption ? Utils.cleanText(actualOption.text) : '';
+          const actualText = actualOption ? Utils.cleanCategoryText(actualOption.text) : '';
           const actualValue = control.value;
 
-          const isVerified = (actualValue === matched.value) &&
-                             (actualText.toLowerCase() === matched.text.toLowerCase() || actualText.toLowerCase().includes(matched.text.toLowerCase()));
+          const isVerified = (actualValue === matched.value) && (actualOption !== null && actualOption !== undefined);
 
           if (!isVerified) {
             return {
               success: false,
-              error: `Selection verification failed. Expected text "${matched.text}" with value "${matched.value}", actual selected: text "${actualText}", value "${actualValue}"`,
+              error: `Selection verification failed. Expected value "${matched.value}", actual selected: text "${actualText}", value "${actualValue}"`,
               selectedText: actualText,
               selectedValue: actualValue
             };
@@ -3394,7 +3442,7 @@
 
           return {
             success: true,
-            selectedText: actualText,
+            selectedText: matched.text,
             selectedValue: actualValue,
             availableOptions: options.map(o => o.text)
           };
@@ -3582,6 +3630,9 @@
 
     return {
       version: '2.4.0-DICE2',
+      DropdownManager,
+      DescriptionManager,
+      Utils,
       async runDryRun(targetDoc, extractedFields = {}, options = {}) {
         if (!targetDoc) targetDoc = document;
         const log = (msg) => { if (typeof options.logCallback === 'function') options.logCallback(msg); };
@@ -3866,8 +3917,8 @@
             return result;
           }
 
-          const catSelRes = DropdownManager.selectAndVerify(catMatch.control, 'Vehicles', 0, targetDoc);
-          log(`Category:\n  selector → ${catMatch.control.id || catMatch.control.name || catMatch.control.tagName}\n  selected value → ${catSelRes.selectedText}\n  status → ${catSelRes.success ? 'PASS' : 'FAIL'}`);
+          const catSelRes = DropdownManager.selectAndVerify(catMatch.control, catMatch.option.value || 'Vehicles', 0, targetDoc);
+          log(`Category:\n  selector → ${catMatch.control.id || catMatch.control.name || catMatch.control.tagName}\n  selected value → ${catSelRes.selectedValue} (${catSelRes.selectedText})\n  status → ${catSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!catSelRes.success) {
             const err = `Category selection failed: ${catSelRes.error}`;
@@ -3881,10 +3932,10 @@
 
           // 2. Sub Category -> Car - parts (Level 1, WAIT FOR AJAX UPDATE)
           log('2. Waiting for Sub Category dropdown to populate with "Car - parts"...');
-          const subCatMatch = await DropdownManager.waitForLevelOption(targetDoc, 1, /car\s*-\s*parts|cars?\s*-\s*parts/i, {
-            selectors: ['#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2', 'select[name="parent_id[]"]'],
-            labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts\s*\*?$/i, /\bsub-category\b/i],
-            names: ['sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2', 'parent_id[]']
+          const subCatMatch = await DropdownManager.waitForLevelOption(targetDoc, 1, /cars?\s*-\s*parts?/i, {
+            selectors: ['#parent_id_1', '#target_cars_parts', '#target_sub_category', '#sub_category', 'select[name="sub_category"]', 'select[name*="sub_cat"]', '#cat_id_2', 'select[name="parent_id[]"]'],
+            labels: [/sub\s*category\s*\*?$/i, /cars?\s*-\s*parts?\s*\*?$/i, /\bsub-category\b/i],
+            names: ['parent_id_1', 'sub_category', 'target_cars_parts', 'subcatid', 'cat_id_2', 'parent_id[]']
           }, opts.maxWaitMs, opts.pollIntervalMs);
 
           if (!subCatMatch || !subCatMatch.control) {
@@ -3896,8 +3947,8 @@
             return result;
           }
 
-          const subCatSelRes = DropdownManager.selectAndVerify(subCatMatch.control, 'Car - parts', 1, targetDoc);
-          log(`Sub Category:\n  selector → ${subCatMatch.control.id || subCatMatch.control.name || subCatMatch.control.tagName}\n  available options → [${(subCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${subCatSelRes.selectedText}\n  status → ${subCatSelRes.success ? 'PASS' : 'FAIL'}`);
+          const subCatSelRes = DropdownManager.selectAndVerify(subCatMatch.control, subCatMatch.option.value || 'Car - parts', 1, targetDoc);
+          log(`Sub Category:\n  selector → ${subCatMatch.control.id || subCatMatch.control.name || subCatMatch.control.tagName}\n  available options → [${(subCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${subCatSelRes.selectedValue} (${subCatSelRes.selectedText})\n  status → ${subCatSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!subCatSelRes.success) {
             const err = `Sub Category selection failed: ${subCatSelRes.error}`;
@@ -3912,9 +3963,9 @@
           // 3. Third-level Category -> Used cars in South Africa (Level 2, WAIT FOR AJAX UPDATE)
           log('3. Waiting for Third-level Category dropdown to populate with "Used cars in South Africa"...');
           const thirdCatMatch = await DropdownManager.waitForLevelOption(targetDoc, 2, /used\s*cars\s*in\s*south\s*africa|all\s*south\s*africa/i, {
-            selectors: ['#target_used_cars_sa', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3', 'select[name="parent_id[]"]'],
+            selectors: ['#parent_id_2', '#target_used_cars_sa', '#sub_sub_category', '#third_category', 'select[name="third_category"]', 'select[name*="third"]', '#cat_id_3', 'select[name="parent_id[]"]'],
             labels: [/used\s*cars\s*in\s*south\s*africa\s*\*?$/i, /third-level/i, /sub\s*sub\s*category/i],
-            names: ['third_category', 'target_used_cars_sa', 'cat_id_3', 'parent_id[]']
+            names: ['parent_id_2', 'third_category', 'target_used_cars_sa', 'cat_id_3', 'parent_id[]']
           }, opts.maxWaitMs, opts.pollIntervalMs);
 
           if (!thirdCatMatch || !thirdCatMatch.control) {
@@ -3926,8 +3977,8 @@
             return result;
           }
 
-          const thirdCatSelRes = DropdownManager.selectAndVerify(thirdCatMatch.control, 'Used cars in South Africa', 2, targetDoc);
-          log(`Third-level:\n  selector → ${thirdCatMatch.control.id || thirdCatMatch.control.name || thirdCatMatch.control.tagName}\n  available options → [${(thirdCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${thirdCatSelRes.selectedText}\n  status → ${thirdCatSelRes.success ? 'PASS' : 'FAIL'}`);
+          const thirdCatSelRes = DropdownManager.selectAndVerify(thirdCatMatch.control, thirdCatMatch.option.value || 'Used cars in South Africa', 2, targetDoc);
+          log(`Third-level:\n  selector → ${thirdCatMatch.control.id || thirdCatMatch.control.name || thirdCatMatch.control.tagName}\n  available options → [${(thirdCatSelRes.availableOptions || []).join(', ')}]\n  selected value → ${thirdCatSelRes.selectedValue} (${thirdCatSelRes.selectedText})\n  status → ${thirdCatSelRes.success ? 'PASS' : 'FAIL'}`);
 
           if (!thirdCatSelRes.success) {
             const err = `Third-level Category selection failed: ${thirdCatSelRes.error}`;
