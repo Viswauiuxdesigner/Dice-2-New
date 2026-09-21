@@ -121,16 +121,6 @@
         }
       } catch (e) {}
 
-      // Trigger global JomClassifieds getsubcat if defined
-      try {
-        const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
-        const unsafe = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
-        if (typeof win?.getsubcat === 'function') {
-          win.getsubcat(el.value);
-        } else if (typeof unsafe?.getsubcat === 'function') {
-          unsafe.getsubcat(el.value);
-        }
-      } catch (e) {}
 
       // Trigger jQuery / Chosen / Select2 events if available
       try {
@@ -349,22 +339,6 @@
         matched = options.find(o => o.value.toLowerCase() === cleanSearch || o.value === rawSearch);
       }
 
-      // 4. Word boundary / substring match
-      if (!matched) {
-        matched = options.find(o => {
-          const t = Utils.cleanCategoryText(o.text).toLowerCase();
-          return t.startsWith(cleanSearch) || t.endsWith(cleanSearch) || t.includes(` ${cleanSearch} `);
-        });
-      }
-
-      if (!matched) {
-        matched = options.find(o => Utils.cleanCategoryText(o.text).toLowerCase().includes(cleanSearch));
-      }
-
-      if (!matched) {
-        matched = options.find(o => o.value.toLowerCase().includes(cleanSearch));
-      }
-
       return matched || null;
     },
 
@@ -388,13 +362,16 @@
             level: level
           };
         }
+        // If a dedicated control exists for this specific level, do not jump to other level controls
+        return null;
       }
 
-      // Scan all non-placeholder selects inside the listing form
+      // If no dedicated level select exists, check candidates at the matching level index
       const candidates = Array.from(form.querySelectorAll('select[name="parent_id[]"], select.jomcl-category, select[name*="cat"]'))
         .filter(s => !this.isPlaceholderOnly(s));
 
-      for (const ctrl of candidates) {
+      if (candidates[level]) {
+        const ctrl = candidates[level];
         const opts = this.getOptions(ctrl);
         const matched = this.matchOption(opts, targetMatcher);
         if (matched) {
@@ -584,10 +561,10 @@
         let visibleChosenText = '';
         if (control.id) {
           const chosenEl = targetDoc.querySelector(`#${control.id}_chzn .chosen-single span, .${control.id}_chzn .chosen-single span, #${control.id}_chosen .chosen-single span`);
-          if (chosenEl) visibleChosenText = Utils.cleanCategoryText(chosenEl.textContent);
+          if (chosenEl) visibleChosenText = Utils.cleanText(chosenEl.textContent);
         }
         if (!visibleChosenText && parentSpan) {
-          visibleChosenText = Utils.cleanCategoryText(parentSpan.textContent);
+          visibleChosenText = Utils.cleanText(parentSpan.textContent);
         }
 
         // Verify actual selection:
@@ -1527,7 +1504,7 @@
         // ================================================================
         log('5. Populating vehicle input fields...');
         if (typeof window !== 'undefined' && window.CarSmartPasteEngine && typeof window.CarSmartPasteEngine.fillTargetForm === 'function') {
-          window.CarSmartPasteEngine.fillTargetForm(targetDoc, fields);
+          window.CarSmartPasteEngine.fillTargetForm(targetDoc, fields, { skipDescription: true });
           log('✓ Applied vehicle field mapping via core Smart Engine.');
         } else if (typeof window !== 'undefined' && window.CarTargetFiller && typeof window.CarTargetFiller.fillForm === 'function') {
           window.CarTargetFiller.fillForm(targetDoc, fields);
@@ -1652,11 +1629,70 @@
 
         // Verification checks for all filled fields
         const fieldVerificationList = [
-          { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]'] },
-          { key: 'year', label: 'Year', selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
-          { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', '#jform_field_mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name="fields[odometer]"]'] },
-          { key: 'price', label: 'Price', selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]'], isPrice: true }
+          {
+            key: 'title',
+            label: 'Title',
+            selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]', '#jform_title'],
+            labels: [/^title\s*\*?$/i, /^advert title\s*\*?$/i, /^vehicle title\s*\*?$/i]
+          },
+          {
+            key: 'year',
+            label: 'Year',
+            selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]', 'input[name*="[year]"]'],
+            labels: [/^year\s*\*?$/i, /^model year\s*\*?$/i, /^manufacturing year\s*\*?$/i]
+          },
+          {
+            key: 'kilometersDriven',
+            label: 'Kilometers Driven',
+            selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', '#jform_field_mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name="fields[odometer]"]'],
+            labels: [/^kilometers(?:\s+driven)?\s*\*?$/i, /^mileage\s*\*?$/i, /^odometer\s*\*?$/i, /\bkilometers\s*driven\b/i]
+          },
+          {
+            key: 'price',
+            label: 'Price',
+            selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]', 'input[name*="listing_price"]'],
+            labels: [/^price\s*\*?$/i, /^listing price\s*\*?$/i],
+            isPrice: true
+          }
         ];
+
+        const resolveVerificationElement = (item) => {
+          // 1. Direct selectors
+          for (const sel of item.selectors) {
+            try {
+              const el = targetDoc.querySelector(sel);
+              if (el && el.type !== 'hidden' && el.type !== 'button' && el.type !== 'submit') return el;
+            } catch (e) {}
+          }
+          // 2. Semantic label fallback
+          if (item.labels && item.labels.length > 0) {
+            const allLabels = targetDoc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
+            for (const lbl of allLabels) {
+              const textOnly = (lbl.textContent || '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+              const titleOnly = (lbl.getAttribute('title') || '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+              for (const pattern of item.labels) {
+                const matches = typeof pattern === 'string'
+                  ? (textOnly.toLowerCase() === pattern.toLowerCase() || titleOnly.toLowerCase() === pattern.toLowerCase())
+                  : (pattern.test(textOnly) || pattern.test(titleOnly));
+                if (matches) {
+                  const forId = lbl.getAttribute('for');
+                  if (forId) {
+                    const el = targetDoc.getElementById(forId) || targetDoc.querySelector('#' + CSS.escape(forId));
+                    if (el && el.type !== 'hidden' && el.type !== 'button' && el.type !== 'submit') return el;
+                  }
+                  const inside = lbl.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea');
+                  if (inside) return inside;
+                  const container = lbl.closest('.form-group, .control-group, .controls, tr, td, fieldset, div') || lbl.parentElement;
+                  if (container) {
+                    const sibling = container.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea');
+                    if (sibling) return sibling;
+                  }
+                }
+              }
+            }
+          }
+          return null;
+        };
 
         let hasFieldVerificationFailure = false;
         let failedFieldName = '';
@@ -1666,37 +1702,11 @@
           const expectedVal = fields[item.key];
           if (!expectedVal) continue;
 
-          let el = null;
-          for (const sel of item.selectors) {
-            try {
-              el = targetDoc.querySelector(sel);
-              if (el) break;
-            } catch (e) {}
-          }
-
-          // Semantic label fallback for dynamic custom fields
-          if (!el && item.key === 'kilometersDriven') {
-            const allLabels = targetDoc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
-            for (const lbl of allLabels) {
-              const lText = ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || '')).replace(/\s+/g, ' ').trim();
-              if (/^kilometers(?:\s+driven)?\s*\*?$/i.test(lText) || /\bkilometers\s*driven\b/i.test(lText)) {
-                const forId = lbl.getAttribute('for');
-                if (forId) {
-                  el = targetDoc.getElementById(forId) || targetDoc.querySelector('#' + CSS.escape(forId));
-                }
-                if (!el) {
-                  const container = lbl.closest('.form-group, .control-group, tr, td, fieldset') || lbl.parentElement;
-                  if (container) el = container.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"])');
-                }
-                if (el) break;
-              }
-            }
-          }
-
+          const el = resolveVerificationElement(item);
           const actualVal = el ? Utils.cleanText(el.value) : '';
           const pass = !!(el && (actualVal.length > 0));
 
-          log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || sel) : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
+          log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || 'input') : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
 
           result.fieldVerifications.push({
             field: item.label,
@@ -1761,8 +1771,7 @@ verification result: FAIL`);
     },
 
     /**
-     * Injects a floating banner informing the user that automation has finished
-     * and prompting for manual review before final submission.
+     * Injects a clean, minimal toast informing the user that automation completed.
      */
     renderCompletionBanner(targetDoc) {
       if (!targetDoc || !targetDoc.body) return;
@@ -1772,32 +1781,31 @@ verification result: FAIL`);
 
         const banner = targetDoc.createElement('div');
         banner.id = 'dice-autofill-banner';
+        banner.setAttribute('role', 'status');
         banner.style.cssText = `
           position: fixed;
-          top: 16px;
-          left: 50%;
-          transform: translateX(-50%);
+          bottom: 24px;
+          right: 24px;
           background: #0f172a;
           color: #f8fafc;
-          padding: 12px 20px;
+          padding: 10px 16px;
           border-radius: 8px;
-          border-left: 5px solid #22c55e;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+          border: 1px solid #1e293b;
+          border-left: 4px solid #22c55e;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
           z-index: 99999999;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-size: 13px;
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
+          pointer-events: auto;
         `;
 
         banner.innerHTML = `
-          <div style="font-size: 18px;">✅</div>
-          <div>
-            <div style="font-weight: 700; color: #4ade80; font-size: 14px;">✓ Auto-fill completed</div>
-            <div style="color: #94a3b8; font-size: 12px;">Please review the form before manually submitting.</div>
-          </div>
-          <button id="dice-banner-close" style="background: transparent; border: none; color: #64748b; font-size: 16px; cursor: pointer; padding: 2px 6px; margin-left: 8px;">✕</button>
+          <span style="color: #4ade80; font-weight: 700; font-size: 15px;">✓</span>
+          <span style="font-weight: 600; color: #f8fafc;">Form filled successfully</span>
+          <button id="dice-banner-close" aria-label="Close" style="background: transparent; border: none; color: #94a3b8; font-size: 15px; cursor: pointer; padding: 2px 6px; margin-left: 6px; line-height: 1;">✕</button>
         `;
 
         targetDoc.body.appendChild(banner);
@@ -1807,12 +1815,12 @@ verification result: FAIL`);
         }
         setTimeout(() => {
           if (banner.parentElement) banner.remove();
-        }, 12000);
+        }, 4500);
       } catch (e) {}
     },
 
     /**
-     * Injects a red error banner when automation stops or fails
+     * Injects a clean, concise error toast when automation stops or fails.
      */
     renderErrorBanner(targetDoc, reason) {
       if (!targetDoc || !targetDoc.body) return;
@@ -1822,32 +1830,36 @@ verification result: FAIL`);
 
         const banner = targetDoc.createElement('div');
         banner.id = 'dice-autofill-banner';
+        banner.setAttribute('role', 'alert');
         banner.style.cssText = `
           position: fixed;
-          top: 16px;
-          left: 50%;
-          transform: translateX(-50%);
+          bottom: 24px;
+          right: 24px;
           background: #1e1014;
           color: #f8fafc;
-          padding: 12px 20px;
+          padding: 10px 16px;
           border-radius: 8px;
-          border-left: 5px solid #ef4444;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+          border: 1px solid #450a0a;
+          border-left: 4px solid #ef4444;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
           z-index: 99999999;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-size: 13px;
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
+          pointer-events: auto;
         `;
 
+        const cleanReason = String(reason || 'Error')
+          .replace(/^Auto-fill incomplete:\s*/i, '')
+          .replace(/^Failed field:\s*/i, '')
+          .trim();
+
         banner.innerHTML = `
-          <div style="font-size: 18px;">❌</div>
-          <div>
-            <div style="font-weight: 700; color: #f87171; font-size: 14px;">❌ Auto-fill stopped</div>
-            <div style="color: #cbd5e1; font-size: 12px;">${reason}</div>
-          </div>
-          <button id="dice-banner-close" style="background: transparent; border: none; color: #94a3b8; font-size: 16px; cursor: pointer; padding: 2px 6px; margin-left: 8px;">✕</button>
+          <span style="color: #f87171; font-weight: 700; font-size: 15px;">✕</span>
+          <span style="font-weight: 600; color: #f8fafc;">Auto-fill stopped: ${cleanReason}</span>
+          <button id="dice-banner-close" aria-label="Close" style="background: transparent; border: none; color: #94a3b8; font-size: 15px; cursor: pointer; padding: 2px 6px; margin-left: 6px; line-height: 1;">✕</button>
         `;
 
         targetDoc.body.appendChild(banner);
@@ -1855,6 +1867,9 @@ verification result: FAIL`);
         if (closeBtn) {
           closeBtn.onclick = () => banner.remove();
         }
+        setTimeout(() => {
+          if (banner.parentElement) banner.remove();
+        }, 6000);
       } catch (e) {}
     }
   };

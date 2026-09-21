@@ -2273,7 +2273,7 @@
       this.fillTargetForm(document, payload.fields);
     },
 
-    fillTargetForm(doc, fields) {
+    fillTargetForm(doc, fields, options = {}) {
       if (!doc || !fields) return;
 
       const triggerEvents = (el) => {
@@ -2300,15 +2300,31 @@
           } catch (e) {}
         }
 
-        // 2. Label match
+        // 2. Label match (clean textContent without tooltip/popover pollution)
         if (identifiers.labels && identifiers.labels.length > 0) {
           const allLabels = doc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
           for (const lbl of allLabels) {
-            const lText = ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || '') + ' ' + (lbl.getAttribute('data-original-title') || '')).replace(/\s+/g, ' ').trim();
+            const textContent = (lbl.textContent || '')
+              .replace(/[\*\u2022\u2217\u2731\u2732]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            const titleText = (lbl.getAttribute('title') || lbl.getAttribute('data-original-title') || '')
+              .replace(/[\*\u2022\u2217\u2731\u2732]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+
             for (const targetLabel of identifiers.labels) {
-              const matches = typeof targetLabel === 'string'
-                ? lText.toLowerCase() === targetLabel.toLowerCase()
-                : targetLabel.test(lText);
+              const testMatch = (str) => {
+                if (!str) return false;
+                return typeof targetLabel === 'string'
+                  ? str.toLowerCase() === targetLabel.toLowerCase()
+                  : targetLabel.test(str);
+              };
+
+              let matches = testMatch(textContent) || testMatch(titleText);
+              if (!matches && textContent.length > 0 && typeof targetLabel === 'string') {
+                matches = textContent.toLowerCase().includes(targetLabel.toLowerCase());
+              }
 
               if (matches) {
                 // Check if label has a "for" attribute
@@ -2939,7 +2955,7 @@
       }
 
       // 18. DESCRIPTION (Rich text editor / TinyMCE / exact description textarea only)
-      if (isClean(fields.description)) {
+      if (!options?.skipDescription && isClean(fields.description)) {
         this.fillDescription(doc, fields.description);
       }
     },
@@ -3093,15 +3109,6 @@
         } catch (e) {}
         try {
           if (typeof el.onchange === 'function') el.onchange.call(el);
-        } catch (e) {}
-        try {
-          const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
-          const unsafe = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
-          if (typeof win?.getsubcat === 'function') {
-            win.getsubcat(el.value);
-          } else if (typeof unsafe?.getsubcat === 'function') {
-            unsafe.getsubcat(el.value);
-          }
         } catch (e) {}
         try {
           const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
@@ -3297,22 +3304,6 @@
           matched = options.find(o => o.value.toLowerCase() === cleanSearch || o.value === rawSearch);
         }
 
-        // 4. Word boundary / substring match
-        if (!matched) {
-          matched = options.find(o => {
-            const t = Utils.cleanCategoryText(o.text).toLowerCase();
-            return t.startsWith(cleanSearch) || t.endsWith(cleanSearch) || t.includes(` ${cleanSearch} `);
-          });
-        }
-
-        if (!matched) {
-          matched = options.find(o => Utils.cleanCategoryText(o.text).toLowerCase().includes(cleanSearch));
-        }
-
-        if (!matched) {
-          matched = options.find(o => o.value.toLowerCase().includes(cleanSearch));
-        }
-
         return matched || null;
       },
 
@@ -3332,12 +3323,15 @@
               level: level
             };
           }
+          // If a dedicated control exists for this specific level, do not jump to other level controls
+          return null;
         }
 
         const candidates = Array.from(form.querySelectorAll('select[name="parent_id[]"], select.jomcl-category, select[name*="cat"]'))
           .filter(s => !this.isPlaceholderOnly(s));
 
-        for (const ctrl of candidates) {
+        if (candidates[level]) {
+          const ctrl = candidates[level];
           const opts = this.getOptions(ctrl);
           const matched = this.matchOption(opts, targetMatcher);
           if (matched) {
@@ -3488,10 +3482,10 @@
           let visibleChosenText = '';
           if (control.id) {
             const chosenEl = targetDoc.querySelector(`#${control.id}_chzn .chosen-single span, .${control.id}_chzn .chosen-single span, #${control.id}_chosen .chosen-single span`);
-            if (chosenEl) visibleChosenText = Utils.cleanCategoryText(chosenEl.textContent);
+            if (chosenEl) visibleChosenText = Utils.cleanText(chosenEl.textContent);
           }
           if (!visibleChosenText && parentSpan) {
-            visibleChosenText = Utils.cleanCategoryText(parentSpan.textContent);
+            visibleChosenText = Utils.cleanText(parentSpan.textContent);
           }
 
           const actualIndex = control.selectedIndex;
@@ -4259,7 +4253,7 @@
 
           // 5. Populate Vehicle Fields
           log('5. Populating vehicle input fields...');
-          SmartPasteEngine.fillTargetForm(targetDoc, fields);
+          SmartPasteEngine.fillTargetForm(targetDoc, fields, { skipDescription: true });
           result.stepsCompleted.push('Vehicle Fields Populated');
 
           // 6. Price & Currency -> R (Rand)
@@ -4352,11 +4346,70 @@
           await Utils.sleep(opts.stepDelayMs);
 
           const fieldVerificationList = [
-            { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]'] },
-            { key: 'year', label: 'Year', selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
-            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', '#jform_field_mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name="fields[odometer]"]'] },
-            { key: 'price', label: 'Price', selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]'], isPrice: true }
+            {
+              key: 'title',
+              label: 'Title',
+              selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]', '#jform_title'],
+              labels: [/^title\s*\*?$/i, /^advert title\s*\*?$/i, /^vehicle title\s*\*?$/i]
+            },
+            {
+              key: 'year',
+              label: 'Year',
+              selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]', 'input[name*="[year]"]'],
+              labels: [/^year\s*\*?$/i, /^model year\s*\*?$/i, /^manufacturing year\s*\*?$/i]
+            },
+            {
+              key: 'kilometersDriven',
+              label: 'Kilometers Driven',
+              selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', '#jform_field_mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name="fields[odometer]"]'],
+              labels: [/^kilometers(?:\s+driven)?\s*\*?$/i, /^mileage\s*\*?$/i, /^odometer\s*\*?$/i, /\bkilometers\s*driven\b/i]
+            },
+            {
+              key: 'price',
+              label: 'Price',
+              selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]', 'input[name*="listing_price"]'],
+              labels: [/^price\s*\*?$/i, /^listing price\s*\*?$/i],
+              isPrice: true
+            }
           ];
+
+          const resolveVerificationElement = (item) => {
+            // 1. Direct selectors
+            for (const sel of item.selectors) {
+              try {
+                const el = targetDoc.querySelector(sel);
+                if (el && el.type !== 'hidden' && el.type !== 'button' && el.type !== 'submit') return el;
+              } catch (e) {}
+            }
+            // 2. Semantic label fallback
+            if (item.labels && item.labels.length > 0) {
+              const allLabels = targetDoc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
+              for (const lbl of allLabels) {
+                const textOnly = (lbl.textContent || '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+                const titleOnly = (lbl.getAttribute('title') || '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
+                for (const pattern of item.labels) {
+                  const matches = typeof pattern === 'string'
+                    ? (textOnly.toLowerCase() === pattern.toLowerCase() || titleOnly.toLowerCase() === pattern.toLowerCase())
+                    : (pattern.test(textOnly) || pattern.test(titleOnly));
+                  if (matches) {
+                    const forId = lbl.getAttribute('for');
+                    if (forId) {
+                      const el = targetDoc.getElementById(forId) || targetDoc.querySelector('#' + CSS.escape(forId));
+                      if (el && el.type !== 'hidden' && el.type !== 'button' && el.type !== 'submit') return el;
+                    }
+                    const inside = lbl.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea');
+                    if (inside) return inside;
+                    const container = lbl.closest('.form-group, .control-group, .controls, tr, td, fieldset, div') || lbl.parentElement;
+                    if (container) {
+                      const sibling = container.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea');
+                      if (sibling) return sibling;
+                    }
+                  }
+                }
+              }
+            }
+            return null;
+          };
 
           let hasFieldVerificationFailure = false;
           let failedFieldName = '';
@@ -4366,37 +4419,11 @@
             const expectedVal = fields[item.key];
             if (!expectedVal) continue;
 
-            let el = null;
-            for (const sel of item.selectors) {
-              try {
-                el = targetDoc.querySelector(sel);
-                if (el) break;
-              } catch (e) {}
-            }
-
-            // Semantic label fallback for dynamic custom fields
-            if (!el && item.key === 'kilometersDriven') {
-              const allLabels = targetDoc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
-              for (const lbl of allLabels) {
-                const lText = ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || '')).replace(/\s+/g, ' ').trim();
-                if (/^kilometers(?:\s+driven)?\s*\*?$/i.test(lText) || /\bkilometers\s*driven\b/i.test(lText)) {
-                  const forId = lbl.getAttribute('for');
-                  if (forId) {
-                    el = targetDoc.getElementById(forId) || targetDoc.querySelector('#' + CSS.escape(forId));
-                  }
-                  if (!el) {
-                    const container = lbl.closest('.form-group, .control-group, tr, td, fieldset') || lbl.parentElement;
-                    if (container) el = container.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"])');
-                  }
-                  if (el) break;
-                }
-              }
-            }
-
+            const el = resolveVerificationElement(item);
             const actualVal = el ? Utils.cleanText(el.value) : '';
             const pass = !!(el && (actualVal.length > 0));
 
-            log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || sel) : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
+            log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || 'input') : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
 
             result.fieldVerifications.push({
               field: item.label,
@@ -4462,11 +4489,13 @@ verification result: FAIL`);
           if (existing) existing.remove();
           const banner = targetDoc.createElement('div');
           banner.id = 'dice-autofill-banner';
-          banner.style.cssText = 'position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#0f172a; color:#f8fafc; padding:12px 20px; border-radius:8px; border-left:5px solid #22c55e; box-shadow:0 10px 25px rgba(0,0,0,0.35); z-index:99999999; font-family:sans-serif; font-size:13px; display:flex; align-items:center; gap:12px;';
-          banner.innerHTML = '<div style="font-size:18px;">✅</div><div><div style="font-weight:700; color:#4ade80; font-size:14px;">✓ Auto-fill completed</div><div style="color:#94a3b8; font-size:12px;">Please review the form before manually submitting.</div></div><button id="dice-banner-close" style="background:transparent; border:none; color:#64748b; font-size:16px; cursor:pointer; padding:2px 6px; margin-left:8px;">✕</button>';
+          banner.setAttribute('role', 'status');
+          banner.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#0f172a; color:#f8fafc; padding:10px 16px; border-radius:8px; border:1px solid #1e293b; border-left:4px solid #22c55e; box-shadow:0 10px 25px rgba(0,0,0,0.4); z-index:99999999; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size:13px; display:flex; align-items:center; gap:10px; pointer-events:auto;';
+          banner.innerHTML = '<span style="color:#4ade80; font-weight:700; font-size:15px;">✓</span><span style="font-weight:600; color:#f8fafc;">Form filled successfully</span><button id="dice-banner-close" aria-label="Close" style="background:transparent; border:none; color:#94a3b8; font-size:15px; cursor:pointer; padding:2px 6px; margin-left:6px; line-height:1;">✕</button>';
           targetDoc.body.appendChild(banner);
-          banner.querySelector('#dice-banner-close').onclick = () => banner.remove();
-          setTimeout(() => { if (banner.parentElement) banner.remove(); }, 12000);
+          const closeBtn = banner.querySelector('#dice-banner-close');
+          if (closeBtn) closeBtn.onclick = () => banner.remove();
+          setTimeout(() => { if (banner.parentElement) banner.remove(); }, 4500);
         } catch (e) {}
       },
 
@@ -4477,10 +4506,14 @@ verification result: FAIL`);
           if (existing) existing.remove();
           const banner = targetDoc.createElement('div');
           banner.id = 'dice-autofill-banner';
-          banner.style.cssText = 'position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#1e1014; color:#f8fafc; padding:12px 20px; border-radius:8px; border-left:5px solid #ef4444; box-shadow:0 10px 25px rgba(0,0,0,0.35); z-index:99999999; font-family:sans-serif; font-size:13px; display:flex; align-items:center; gap:12px;';
-          banner.innerHTML = `<div style="font-size:18px;">❌</div><div><div style="font-weight:700; color:#f87171; font-size:14px;">❌ Auto-fill stopped</div><div style="color:#cbd5e1; font-size:12px;">${reason}</div></div><button id="dice-banner-close" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:2px 6px; margin-left:8px;">✕</button>`;
+          banner.setAttribute('role', 'alert');
+          banner.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#1e1014; color:#f8fafc; padding:10px 16px; border-radius:8px; border:1px solid #450a0a; border-left:4px solid #ef4444; box-shadow:0 10px 25px rgba(0,0,0,0.4); z-index:99999999; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size:13px; display:flex; align-items:center; gap:10px; pointer-events:auto;';
+          const cleanReason = String(reason || 'Error').replace(/^Auto-fill incomplete:\s*/i, '').replace(/^Failed field:\s*/i, '').trim();
+          banner.innerHTML = `<span style="color:#f87171; font-weight:700; font-size:15px;">✕</span><span style="font-weight:600; color:#f8fafc;">Auto-fill stopped: ${cleanReason}</span><button id="dice-banner-close" aria-label="Close" style="background:transparent; border:none; color:#94a3b8; font-size:15px; cursor:pointer; padding:2px 6px; margin-left:6px; line-height:1;">✕</button>`;
           targetDoc.body.appendChild(banner);
-          banner.querySelector('#dice-banner-close').onclick = () => banner.remove();
+          const closeBtn = banner.querySelector('#dice-banner-close');
+          if (closeBtn) closeBtn.onclick = () => banner.remove();
+          setTimeout(() => { if (banner.parentElement) banner.remove(); }, 6000);
         } catch (e) {}
       }
     };
@@ -4561,7 +4594,7 @@ verification result: FAIL`);
       }
     },
 
-    renderPendingWidget(job) {
+    renderPendingWidget(job, options = {}) {
       if (typeof window !== 'undefined' && window.self !== window.top) {
         if (!document.querySelector('form#adminForm, #category_div, #parent_id_0')) {
           return;
@@ -4571,14 +4604,16 @@ verification result: FAIL`);
 
       const title = job.fields?.title || 'Vehicle Listing';
       const price = job.fields?.price ? `R ${job.fields.price}` : '';
+      const isDebugMode = !!(options.debugMode || job.debugMode);
 
       const widget = document.createElement('div');
       widget.id = 'dice-floating-automation-bar';
       widget.style.cssText = `
         position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 320px;
+        bottom: 24px;
+        right: 24px;
+        width: 280px;
+        max-width: calc(100vw - 32px);
         background: #0f172a;
         color: #f8fafc;
         border-radius: 8px;
@@ -4588,101 +4623,167 @@ verification result: FAIL`);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 12px;
         overflow: hidden;
+        user-select: none;
+        touch-action: none;
       `;
 
-      widget.innerHTML = `
-        <div style="background: #1e293b; padding: 8px 12px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #334155;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8;">
-              <span>🚗</span> DICE Form Automator
+      // Restore saved position if available
+      try {
+        const savedPos = localStorage.getItem('dice_automator_widget_pos');
+        if (savedPos) {
+          const { left, top } = JSON.parse(savedPos);
+          if (typeof left === 'number' && typeof top === 'number') {
+            const maxL = Math.max(0, window.innerWidth - 300);
+            const maxT = Math.max(0, window.innerHeight - 150);
+            widget.style.left = `${Math.min(Math.max(10, left), maxL)}px`;
+            widget.style.top = `${Math.min(Math.max(10, top), maxT)}px`;
+            widget.style.bottom = 'auto';
+            widget.style.right = 'auto';
+          }
+        }
+      } catch (e) {}
+
+      let debugHtml = '';
+      if (isDebugMode) {
+        debugHtml = `
+          <div id="dice-bar-log" style="margin-top: 8px; max-height: 180px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none; white-space: pre-wrap; user-select: text;"></div>
+          <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; gap: 4px;">
+              <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer; flex: 2;">⚡ Run Auto-Fill</button>
+              <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 5px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer; flex: 1;">🧪 Dry-Run</button>
             </div>
-            <div style="font-size: 10px; color: #94a3b8; font-family: monospace; line-height: 1.3; margin-top: 3px;">
-              BUILD: ${BUILD_COMMIT}<br>VERSION: ${SCRIPT_VERSION}
-            </div>
+            <button id="dice-bar-run-inspect-fields" style="background: #0d9488; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer;">🔎 Inspect Vehicle Fields</button>
+            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; cursor: pointer;">🔎 Inspect Category DOM</button>
           </div>
-          <button id="dice-bar-close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px;">✕</button>
+        `;
+      }
+
+      widget.innerHTML = `
+        <div id="dice-bar-header" style="background: #1e293b; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; cursor: move; user-select: none;">
+          <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8; font-size: 12px;">
+            <span>🚗</span> DICE Automator
+          </div>
+          <button id="dice-bar-close" aria-label="Close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px; line-height: 1;">✕</button>
         </div>
         <div style="padding: 10px 12px;">
-          <div id="dice-bar-status-text" style="color: #4ade80; font-weight: 700; margin-bottom: 4px;">Vehicle data received ✓</div>
-          <div style="font-weight: 600; color: #f8fafc; word-break: break-word;">${title}</div>
-          ${price ? `<div style="color: #94a3b8; font-size: 11px;">Price: ${price}</div>` : ''}
-          <div id="dice-bar-log" style="margin-top: 8px; max-height: 220px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none; white-space: pre-wrap; user-select: text; -webkit-user-select: text;"></div>
-          <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
-            <div style="display: flex; gap: 6px;">
-              <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; flex: 2;">
-                ⚡ Run Auto-Fill
-              </button>
-              <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 8px; border-radius: 4px; font-weight: 700; font-size: 10.5px; cursor: pointer; flex: 1;">
-                🧪 Dry-Run
-              </button>
-            </div>
-            <button id="dice-bar-run-inspect-fields" style="background: #0d9488; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; width: 100%;">
-              🔎 INSPECT VEHICLE FIELDS
-            </button>
-            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 10.5px; cursor: pointer; width: 100%;">
-              🔎 INSPECT CATEGORY DOM
-            </button>
-          </div>
+          <div id="dice-bar-status-text" style="color: #4ade80; font-weight: 700; font-size: 11px; margin-bottom: 4px;">Vehicle data ready ✓</div>
+          <div style="font-weight: 600; color: #f8fafc; font-size: 12px; word-break: break-word;">${title}</div>
+          ${price ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">Price: ${price}</div>` : ''}
+          ${debugHtml}
         </div>
       `;
 
       document.body.appendChild(widget);
       this.statusBarEl = widget;
 
-      widget.querySelector('#dice-bar-close').onclick = () => widget.remove();
-      widget.querySelector('#dice-bar-run-autofill').onclick = async () => {
-        try {
-          this.logToWidget('Starting auto-fill sequence...');
-          const res = await DiceAutomator.fillForm(document, job, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-          this.updateWidgetStatus(res);
-        } catch (error) {
-          this.logToWidget(`❌ Runtime error: ${error.message}`);
-          console.error('[DICE AUTO-FILL]', error);
+      // Close handler
+      const closeBtn = widget.querySelector('#dice-bar-close');
+      if (closeBtn) {
+        closeBtn.onclick = () => {
+          widget.remove();
+          this.statusBarEl = null;
+        };
+      }
+
+      // Dragging logic
+      const headerEl = widget.querySelector('#dice-bar-header');
+      if (headerEl) {
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let origLeft = 0, origTop = 0;
+
+        const onPointerDown = (e) => {
+          if (e.target && e.target.id === 'dice-bar-close') return;
+          isDragging = true;
+          headerEl.style.cursor = 'grabbing';
+          const rect = widget.getBoundingClientRect();
+          startX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+          startY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+          origLeft = rect.left;
+          origTop = rect.top;
+          widget.style.bottom = 'auto';
+          widget.style.right = 'auto';
+          widget.style.left = `${origLeft}px`;
+          widget.style.top = `${origTop}px`;
+          e.preventDefault();
+        };
+
+        const onPointerMove = (e) => {
+          if (!isDragging) return;
+          const curX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+          const curY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+          const dx = curX - startX;
+          const dy = curY - startY;
+          const newL = Math.max(8, Math.min(window.innerWidth - widget.offsetWidth - 8, origLeft + dx));
+          const newT = Math.max(8, Math.min(window.innerHeight - widget.offsetHeight - 8, origTop + dy));
+          widget.style.left = `${newL}px`;
+          widget.style.top = `${newT}px`;
+        };
+
+        const onPointerUp = () => {
+          if (!isDragging) return;
+          isDragging = false;
+          headerEl.style.cursor = 'move';
+          try {
+            const rect = widget.getBoundingClientRect();
+            localStorage.setItem('dice_automator_widget_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+          } catch (e) {}
+        };
+
+        headerEl.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+        headerEl.addEventListener('touchstart', onPointerDown, { passive: false });
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+      }
+
+      // Debug actions if rendered
+      if (isDebugMode) {
+        const runBtn = widget.querySelector('#dice-bar-run-autofill');
+        if (runBtn) {
+          runBtn.onclick = async () => {
+            try {
+              this.logToWidget('Starting auto-fill sequence...');
+              const res = await DiceAutomator.fillForm(document, job, {
+                logCallback: (m) => this.logToWidget(m)
+              });
+              this.updateWidgetStatus(res);
+            } catch (error) {
+              this.logToWidget(`❌ Runtime error: ${error.message}`);
+            }
+          };
         }
-      };
-      widget.querySelector('#dice-bar-run-dryrun').onclick = async () => {
-        try {
-          this.logToWidget('Starting dry-run inspection...');
-          await DiceAutomator.runDryRun(document, job.fields || {}, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-        } catch (error) {
-          this.logToWidget(`❌ Runtime error: ${error.message}`);
-          console.error('[DICE DRY-RUN]', error);
+        const dryBtn = widget.querySelector('#dice-bar-run-dryrun');
+        if (dryBtn) {
+          dryBtn.onclick = async () => {
+            try {
+              this.logToWidget('Starting dry-run inspection...');
+              await DiceAutomator.runDryRun(document, job.fields || {}, {
+                logCallback: (m) => this.logToWidget(m)
+              });
+            } catch (error) {
+              this.logToWidget(`❌ Runtime error: ${error.message}`);
+            }
+          };
         }
-      };
-      widget.querySelector('#dice-bar-run-inspect-fields').onclick = () => {
-        try {
-          const logEl = widget.querySelector('#dice-bar-log');
-          if (logEl) {
-            logEl.style.display = 'block';
-            logEl.textContent = '';
-          }
-          DiceAutomator.runVehicleFieldsDiagnostic(document, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-        } catch (error) {
-          this.logToWidget(`❌ Runtime error: ${error.message}`);
-          console.error('[DICE INSPECT FIELDS]', error);
+        const inspFieldsBtn = widget.querySelector('#dice-bar-run-inspect-fields');
+        if (inspFieldsBtn) {
+          inspFieldsBtn.onclick = () => {
+            const logEl = widget.querySelector('#dice-bar-log');
+            if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
+            DiceAutomator.runVehicleFieldsDiagnostic(document, { logCallback: (m) => this.logToWidget(m) });
+          };
         }
-      };
-      widget.querySelector('#dice-bar-run-inspect').onclick = () => {
-        try {
-          const logEl = widget.querySelector('#dice-bar-log');
-          if (logEl) {
-            logEl.style.display = 'block';
-            logEl.textContent = '';
-          }
-          DiceAutomator.runCategoryDomDiagnostic(document, {
-            logCallback: (m) => this.logToWidget(m)
-          });
-        } catch (error) {
-          this.logToWidget(`❌ Runtime error: ${error.message}`);
-          console.error('[DICE INSPECT]', error);
+        const inspCatBtn = widget.querySelector('#dice-bar-run-inspect');
+        if (inspCatBtn) {
+          inspCatBtn.onclick = () => {
+            const logEl = widget.querySelector('#dice-bar-log');
+            if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
+            DiceAutomator.runCategoryDomDiagnostic(document, { logCallback: (m) => this.logToWidget(m) });
+          };
         }
-      };
+      }
     },
 
     updateWidgetStatus(result) {

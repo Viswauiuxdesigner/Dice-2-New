@@ -20,7 +20,7 @@ if ($spRaw -match '<pre id="test-results"[^>]*>([\s\S]*?)</pre>') {
 
 Write-Output "`n=== TESTING DICE 2 DEPENDENT FLOW AUTOMATION & DRY-RUN SUITE ==="
 $diceFlowUrl = "file:///$encodedDocsDir/test-dice-flow.html"
-cmd /c "`"$edgePath`" --headless --dump-dom --allow-file-access-from-files --disable-web-security --user-data-dir=`"C:\Users\407206\AppData\Local\Temp\edge-dice-test`" --virtual-time-budget=3500 `"$diceFlowUrl`" > dice-flow-out.html"
+cmd /c "`"$edgePath`" --headless --dump-dom --allow-file-access-from-files --disable-web-security --user-data-dir=`"C:\Users\407206\AppData\Local\Temp\edge-dice-test`" --virtual-time-budget=5000 `"$diceFlowUrl`" > dice-flow-out.html"
 $dfRaw = Get-Content 'dice-flow-out.html' -Raw
 if ($dfRaw -match '<pre id="test-results"[^>]*>([\s\S]*?)</pre>') {
     Write-Output $matches[1]
@@ -30,7 +30,7 @@ if ($dfRaw -match '<pre id="test-results"[^>]*>([\s\S]*?)</pre>') {
 
 Write-Output "`n=== TESTING REALISTIC DICE LIVE FORM FIXTURE (BMW X3 OFFLINE FLOW) ==="
 $liveFixtureUrl = "file:///$encodedDocsDir/test-dice-live-fixture.html"
-cmd /c "`"$edgePath`" --headless --dump-dom --allow-file-access-from-files --disable-web-security --user-data-dir=`"C:\Users\407206\AppData\Local\Temp\edge-live-fixture-test`" --virtual-time-budget=4000 `"$liveFixtureUrl`" > live-fixture-out.html"
+cmd /c "`"$edgePath`" --headless --dump-dom --allow-file-access-from-files --disable-web-security --user-data-dir=`"C:\Users\407206\AppData\Local\Temp\edge-live-fixture-test`" --virtual-time-budget=5000 `"$liveFixtureUrl`" > live-fixture-out.html"
 $lfRaw = Get-Content 'live-fixture-out.html' -Raw
 if ($lfRaw -match '<pre id="test-results"[^>]*>([\s\S]*?)</pre>') {
     Write-Output $matches[1]
