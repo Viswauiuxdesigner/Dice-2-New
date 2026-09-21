@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Car Data Entry Helper
 // @namespace    local.car.helper
-// @version      2.3.0-DICE2
+// @version      2.4.0-DICE2
 // @description  Automatic Cars.co.za to DICE form-filling workflow with dependent dropdown sequencing and cross-tab GM event communication
 // @match        https://www.cars.co.za/*
 // @match        https://tamilnadu2026.dicewebfreelancers.com/*
@@ -25,9 +25,9 @@
 (function () {
   'use strict';
 
-  const BUILD_COMMIT = '222ce6a';
-  const SCRIPT_VERSION = '2.3.0-DICE2';
-  const BUILD_TIMESTAMP = '2026-09-19 10:20 UTC';
+  const BUILD_COMMIT = 'a374274';
+  const SCRIPT_VERSION = '2.4.0-DICE2';
+  const BUILD_TIMESTAMP = '2026-09-21 09:30 UTC';
 
   console.log(`[DICE 2 BUILD] ${BUILD_COMMIT}`);
   console.log(`[DICE 2 VERSION] ${SCRIPT_VERSION}`);
@@ -2302,9 +2302,9 @@
 
         // 2. Label match
         if (identifiers.labels && identifiers.labels.length > 0) {
-          const allLabels = doc.querySelectorAll('label, .control-label, .form-label');
+          const allLabels = doc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
           for (const lbl of allLabels) {
-            const lText = lbl.textContent.replace(/\s+/g, ' ').trim();
+            const lText = ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || '') + ' ' + (lbl.getAttribute('data-original-title') || '')).replace(/\s+/g, ' ').trim();
             for (const targetLabel of identifiers.labels) {
               const matches = typeof targetLabel === 'string'
                 ? lText.toLowerCase() === targetLabel.toLowerCase()
@@ -2318,11 +2318,11 @@
                   if (el && this.isSafeEditable(el, identifiers.allowSelect)) return el;
                 }
                 // Check inside label
-                const inside = lbl.querySelector('textarea, input');
+                const inside = lbl.querySelector('textarea, input, select');
                 if (inside && this.isSafeEditable(inside, identifiers.allowSelect)) return inside;
 
                 // Check container/sibling (prefer textarea if present)
-                const container = lbl.closest('.form-group, .control-group, .demo-form-group, tr, td, .form-item, div');
+                const container = lbl.closest('.form-group, .control-group, .demo-form-group, tr, td, .form-item, fieldset, div');
                 if (container) {
                   const siblingTextarea = container.querySelector('textarea');
                   if (siblingTextarea && this.isSafeEditable(siblingTextarea, identifiers.allowSelect)) return siblingTextarea;
@@ -2378,9 +2378,9 @@
       // 4. KILOMETERS DRIVEN
       if (isClean(fields.kilometersDriven)) {
         const el = findFieldElement({
-          selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name*="kilometer"]', 'input[name="target_mileage"]'],
-          labels: [/^kilometers driven\s*\*?$/i, /^odometer mileage\s*(?:\(km\))?\s*\*?$/i, /^mileage\s*\*?$/i],
-          names: ['kilometers_driven', 'mileage', 'target_mileage']
+          selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name*="kilometer"]', 'input[name*="mileage"]', 'input[name*="odometer"]', 'input[name="target_mileage"]', 'input[name="target_kilometers_driven"]'],
+          labels: [/^kilometers(?:\s+driven)?\s*\*?$/i, /^odometer(?:\s+mileage)?\s*(?:\(km\))?\s*\*?$/i, /^mileage\s*\*?$/i, /\bkilometers\s*driven\b/i, /\bkilometer\b/i, /\bmileage\b/i, /\bodometer\b/i],
+          names: ['kilometers_driven', 'mileage', 'odometer', 'target_mileage', 'target_kilometers_driven']
         });
         if (el) { el.value = fields.kilometersDriven; triggerEvents(el); }
       }
@@ -3904,6 +3904,185 @@
         };
       },
 
+      /**
+       * Dedicated read-only diagnostic inspecting form#adminForm, Kilometers candidates,
+       * all dynamic vehicle fields, and category hierarchy state.
+       * Purely read-only: performs ZERO DOM mutations, selections, or form submissions.
+       */
+      runVehicleFieldsDiagnostic(targetDoc, options = {}) {
+        targetDoc = Utils.getEffectiveDocument(targetDoc);
+        const opts = Object.assign({}, options);
+        const log = (msg) => {
+          if (typeof opts.logCallback === 'function') opts.logCallback(msg);
+          console.log(msg);
+        };
+
+        log('========================================');
+        log('🔎 VEHICLE FIELDS & FORM DIAGNOSTIC');
+        log(`URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`);
+        log(`window.self === window.top: ${typeof window !== 'undefined' ? (window.self === window.top) : 'unknown'}`);
+        log(`Time: ${new Date().toISOString()}`);
+        log('========================================\n');
+
+        // 1. Form & Environment Check
+        const adminForm = targetDoc.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm');
+        log('--- FORM & ENVIRONMENT ---');
+        log(`document URL: ${targetDoc.URL || (typeof window !== 'undefined' ? window.location.href : 'unknown')}`);
+        log(`window === window.top: ${typeof window !== 'undefined' ? (window === window.top) : 'unknown'}`);
+        log(`form#adminForm found: ${adminForm ? 'YES' : 'NO'}`);
+        if (adminForm) {
+          const formControls = adminForm.querySelectorAll('input, select, textarea');
+          log(`form#adminForm elements count: ${formControls.length}`);
+          log(`form#adminForm id: "${adminForm.id || ''}", name: "${adminForm.name || ''}", action: "${adminForm.getAttribute('action') || ''}"`);
+        }
+        log('');
+
+        // 2. Category State (Read-Only)
+        log('--- CATEGORY HIERARCHY STATE ---');
+        const p0 = targetDoc.getElementById('parent_id_0') || targetDoc.querySelector('select[name="parent_id[]"]');
+        const p1 = targetDoc.getElementById('parent_id_1') || targetDoc.querySelector('#sub_category_div select, select[name="sub_category"]');
+        const p2 = targetDoc.getElementById('parent_id_2') || targetDoc.querySelector('#sub_sub_category_div select, select[name="third_category"]');
+
+        const getSelectInfo = (el) => {
+          if (!el || el.tagName !== 'SELECT') return 'NOT FOUND';
+          const opt = el.options[el.selectedIndex];
+          return `id="${el.id || ''}" value="${el.value}" selectedText="${opt ? Utils.cleanText(opt.text) : '(none)'}" (options: ${el.options.length})`;
+        };
+
+        log(`#parent_id_0: ${getSelectInfo(p0)}`);
+        log(`#parent_id_1: ${getSelectInfo(p1)}`);
+        log(`#parent_id_2: ${getSelectInfo(p2)}`);
+
+        const allParentIdSelects = Array.from((adminForm || targetDoc).querySelectorAll('select[name="parent_id[]"], select.jomcl-category, select[name*="cat"]'));
+        log(`\nAll Category Selects (${allParentIdSelects.length} total):`);
+        allParentIdSelects.forEach((sel, idx) => {
+          const opt = sel.options[sel.selectedIndex];
+          const computed = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(sel) : null;
+          const isVis = computed ? (computed.display !== 'none' && computed.visibility !== 'hidden') : true;
+          const parent = sel.parentElement;
+          log(`  [Select #${idx}] id="${sel.id || ''}" name="${sel.name || ''}" value="${sel.value}" selectedText="${opt ? Utils.cleanText(opt.text) : ''}" visible=${isVis} parent=<${(parent?.tagName || '').toLowerCase()} id="${parent?.id || ''}" class="${parent?.className || ''}">`);
+        });
+        log('');
+
+        // 3. Kilometers Field Candidates Search (Read-Only inside form)
+        log('--- KILOMETERS CANDIDATES INSPECTION ---');
+        const scope = adminForm || targetDoc;
+        const allFormControls = Array.from(scope.querySelectorAll('input, select, textarea'));
+        const kmCandidates = [];
+
+        allFormControls.forEach(ctrl => {
+          if (ctrl.type === 'hidden' || ctrl.type === 'submit' || ctrl.type === 'button') return;
+          const id = (ctrl.id || '').toLowerCase();
+          const name = (ctrl.name || '').toLowerCase();
+          const cls = (ctrl.className || '').toLowerCase();
+          const placeholder = (ctrl.placeholder || '').toLowerCase();
+          
+          let labelText = '';
+          if (ctrl.id) {
+            const lbl = scope.querySelector(`label[for="${ctrl.id}"]`);
+            if (lbl) labelText += ' ' + lbl.textContent;
+          }
+          const container = ctrl.closest('.control-group, .form-group, .controls, tr, td, div');
+          if (container) {
+            const lbl = container.querySelector('label, .control-label, span.hasPopover, span.hasTooltip');
+            if (lbl) labelText += ' ' + ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || ''));
+          }
+          labelText = labelText.replace(/\s+/g, ' ').trim().toLowerCase();
+
+          const isKmMatch = /km|kilo|mileage|odometer/i.test(id) ||
+                            /km|kilo|mileage|odometer/i.test(name) ||
+                            /km|kilo|mileage|odometer/i.test(cls) ||
+                            /km|kilo|mileage|odometer/i.test(placeholder) ||
+                            /kilometers?|mileage|odometer/i.test(labelText);
+
+          if (isKmMatch) {
+            kmCandidates.push({ ctrl, labelText });
+          }
+        });
+
+        log(`Found ${kmCandidates.length} Kilometers field candidates:`);
+        kmCandidates.forEach((item, idx) => {
+          const c = item.ctrl;
+          const computed = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(c) : null;
+          const isVis = computed ? (computed.display !== 'none' && computed.visibility !== 'hidden') : true;
+          const outer = (c.outerHTML || '').slice(0, 400).replace(/\s+/g, ' ');
+
+          log(`\nKILOMETERS CANDIDATE #${idx + 1}`);
+          log(`tag: ${(c.tagName || '').toLowerCase()}`);
+          log(`id: ${c.id || '(none)'}`);
+          log(`name: ${c.name || '(none)'}`);
+          log(`type: ${c.type || '(none)'}`);
+          log(`class: ${c.className || '(none)'}`);
+          log(`value: "${c.value || ''}"`);
+          log(`placeholder: "${c.placeholder || ''}"`);
+          log(`disabled: ${c.disabled}`);
+          log(`readonly: ${c.readOnly}`);
+          log(`hidden: ${c.hidden}`);
+          log(`display: ${computed?.display || 'unknown'}`);
+          log(`visibility: ${computed?.visibility || 'unknown'}`);
+          log(`offsetWidth: ${c.offsetWidth || 0}`);
+          log(`offsetHeight: ${c.offsetHeight || 0}`);
+          log(`outerHTML: ${outer}`);
+          log(`parent label/text: "${item.labelText}"`);
+        });
+        if (kmCandidates.length === 0) {
+          log('  No specific Kilometers candidates matched pattern.');
+        }
+        log('');
+
+        // 4. Inspect ALL Dynamic Vehicle Fields in Form
+        log('--- ALL FORM INPUT / SELECT / TEXTAREA FIELDS ---');
+        let fieldIdx = 0;
+        allFormControls.forEach(ctrl => {
+          if (ctrl.type === 'hidden' || ctrl.type === 'submit' || ctrl.type === 'button') return;
+          fieldIdx++;
+          const computed = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(ctrl) : null;
+          const isVis = computed ? (computed.display !== 'none' && computed.visibility !== 'hidden') : true;
+          const container = ctrl.closest('.control-group, .form-group, .controls, tr, td, fieldset, div');
+          let labelText = '';
+          if (ctrl.id) {
+            const lbl = scope.querySelector(`label[for="${ctrl.id}"]`);
+            if (lbl) labelText += ' ' + lbl.textContent;
+          }
+          if (container) {
+            const lbl = container.querySelector('label, .control-label, span.hasPopover, span.hasTooltip');
+            if (lbl) labelText += ' ' + ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || ''));
+          }
+          labelText = labelText.replace(/\s+/g, ' ').trim();
+
+          const sem = [];
+          const fullIdName = `${ctrl.id || ''} ${ctrl.name || ''} ${labelText}`.toLowerCase();
+          if (/title/i.test(fullIdName)) sem.push('Title');
+          if (/year/i.test(fullIdName)) sem.push('Year');
+          if (/km|kilo|mileage|odometer/i.test(fullIdName)) sem.push('Kilometers Driven');
+          if (/transmission/i.test(fullIdName)) sem.push('Transmission');
+          if (/fuel/i.test(fullIdName)) sem.push('Fuel');
+          if (/drivetrain|4x/i.test(fullIdName)) sem.push('Drivetrain');
+          if (/colou?r/i.test(fullIdName)) sem.push('Body Colour');
+          if (/condition/i.test(fullIdName)) sem.push('Condition');
+          if (/seat/i.test(fullIdName)) sem.push('Seats');
+          if (/brand|make/i.test(fullIdName)) sem.push('Brand');
+          if (/seller/i.test(fullIdName)) sem.push('Seller Type');
+          if (/price/i.test(fullIdName)) sem.push('Price');
+          if (/currency/i.test(fullIdName)) sem.push('Currency');
+          if (/tag/i.test(fullIdName)) sem.push('Tag');
+          if (/location|country/i.test(fullIdName)) sem.push('Location');
+
+          log(`[Field #${fieldIdx}] tag: ${(ctrl.tagName || '').toLowerCase()} | id: "${ctrl.id || ''}" | name: "${ctrl.name || ''}" | type: "${ctrl.type || ''}" | value: "${ctrl.value || ''}" | placeholder: "${ctrl.placeholder || ''}" | visible: ${isVis} | container: <${(container?.tagName || '').toLowerCase()} id="${container?.id || ''}" class="${container?.className || ''}"> | label: "${labelText}"${sem.length > 0 ? ` | SEMANTIC: [${sem.join(', ')}]` : ''}`);
+        });
+
+        log('\n========================================');
+        log('🏁 VEHICLE FIELDS DIAGNOSTIC COMPLETE');
+        log('========================================');
+
+        return {
+          success: true,
+          kmCandidatesCount: kmCandidates.length,
+          totalFieldsCount: fieldIdx,
+          hasAdminForm: !!adminForm
+        };
+      },
+
       async fillForm(targetDoc, extractedData, options = {}) {
         targetDoc = Utils.getEffectiveDocument(targetDoc);
         if (!extractedData) return { success: false, error: 'No extracted vehicle data provided.' };
@@ -4124,14 +4303,15 @@
           await Utils.sleep(opts.stepDelayMs);
 
           const fieldVerificationList = [
-            { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]'] },
+            { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]'] },
             { key: 'year', label: 'Year', selectors: ['#target_year', '#year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
-            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name*="kilometer"]', 'input[name*="mileage"]'] },
+            { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name*="kilometer"]', 'input[name*="mileage"]'] },
             { key: 'price', label: 'Price', selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]'], isPrice: true }
           ];
 
           let hasFieldVerificationFailure = false;
           let failedFieldName = '';
+          const failedItems = [];
 
           for (const item of fieldVerificationList) {
             const expectedVal = fields[item.key];
@@ -4146,7 +4326,7 @@
             }
 
             const actualVal = el ? Utils.cleanText(el.value) : '';
-            const pass = el && (actualVal.length > 0);
+            const pass = !!(el && (actualVal.length > 0));
 
             log(`Field Verification [${item.label}]:\n  target → ${el ? (el.id || el.name || sel) : 'NOT FOUND'}\n  expected → ${expectedVal}\n  actual → ${actualVal || '(EMPTY)'}\n  status → ${pass ? 'PASS' : 'FAIL'}`);
 
@@ -4160,7 +4340,8 @@
 
             if (!pass) {
               hasFieldVerificationFailure = true;
-              failedFieldName = item.label;
+              if (!failedFieldName) failedFieldName = item.label;
+              failedItems.push({ item, el, actualVal, expectedVal });
             }
           }
 
@@ -4168,28 +4349,20 @@
             const err = `Auto-fill incomplete: Failed field: ${failedFieldName}`;
             log(`❌ ${err}`);
 
-            // Full diagnostic output
-            for (const item of fieldVerificationList) {
-              let el = null;
-              for (const sel of item.selectors) {
-                try { el = targetDoc.querySelector(sel); if (el) break; } catch (e) {}
-              }
-              const actualVal = el ? Utils.cleanText(el.value) : '';
-              const isVisible = el ? (el.offsetParent !== null || el.style.display !== 'none') : false;
-              log(`FIELD: ${item.label}
-Target selector: ${item.selectors.join(', ')}
-Element: ${el ? (el.id || el.name || el.tagName) : 'NOT FOUND'}
+            // Structured diagnostic strictly for FAILED fields matching Step 6 requirements
+            failedItems.forEach(({ item, el, actualVal, expectedVal }) => {
+              log(`\nFAILED FIELD:
+logical field name: ${item.label}
+target selector: ${item.selectors.join(', ')}
+resolved element: ${el ? (el.id || el.name || el.tagName) : 'NOT FOUND'}
 id: ${el?.id || 'none'}
 name: ${el?.name || 'none'}
-type: ${el?.type || el?.tagName || 'none'}
-visible: ${isVisible}
-disabled: ${el?.disabled || false}
-readonly: ${el?.readOnly || false}
-current value: "${actualVal}"
-expected value: "${fields[item.key] || ''}"
-parent form: ${el?.form?.id || el?.form?.name || 'none'}
-document URL/context: ${targetDoc.URL || targetDoc.location?.href || 'unknown'}`);
-            }
+expected raw: "${expectedVal}"
+expected normalized: "${Utils.cleanText(expectedVal)}"
+actual raw: "${el ? el.value : ''}"
+actual normalized: "${actualVal}"
+verification result: FAIL`);
+            });
 
             result.failedStep = failedFieldName;
             result.errors.push(err);
@@ -4375,7 +4548,10 @@ document URL/context: ${targetDoc.URL || targetDoc.location?.href || 'unknown'}`
                 🧪 Dry-Run
               </button>
             </div>
-            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; width: 100%;">
+            <button id="dice-bar-run-inspect-fields" style="background: #0d9488; color: #ffffff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; font-size: 11px; cursor: pointer; width: 100%;">
+              🔎 INSPECT VEHICLE FIELDS
+            </button>
+            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 5px 10px; border-radius: 4px; font-weight: 600; font-size: 10.5px; cursor: pointer; width: 100%;">
               🔎 INSPECT CATEGORY DOM
             </button>
           </div>
@@ -4407,6 +4583,21 @@ document URL/context: ${targetDoc.URL || targetDoc.location?.href || 'unknown'}`
         } catch (error) {
           this.logToWidget(`❌ Runtime error: ${error.message}`);
           console.error('[DICE DRY-RUN]', error);
+        }
+      };
+      widget.querySelector('#dice-bar-run-inspect-fields').onclick = () => {
+        try {
+          const logEl = widget.querySelector('#dice-bar-log');
+          if (logEl) {
+            logEl.style.display = 'block';
+            logEl.textContent = '';
+          }
+          DiceAutomator.runVehicleFieldsDiagnostic(document, {
+            logCallback: (m) => this.logToWidget(m)
+          });
+        } catch (error) {
+          this.logToWidget(`❌ Runtime error: ${error.message}`);
+          console.error('[DICE INSPECT FIELDS]', error);
         }
       };
       widget.querySelector('#dice-bar-run-inspect').onclick = () => {

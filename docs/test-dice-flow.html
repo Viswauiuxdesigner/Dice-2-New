@@ -646,11 +646,27 @@
             inspectThrew = true;
           }
           assert(!inspectThrew, 'TEST W: Inspect button click did NOT throw ReferenceError: Utils is not defined');
+
+          // TEST X: Inspect Vehicle Fields button and runVehicleFieldsDiagnostic
+          const inspectFieldsBtn = widgetEl.querySelector('#dice-bar-run-inspect-fields');
+          assert(inspectFieldsBtn !== null, 'TEST X: [🔎 INSPECT VEHICLE FIELDS] button found on widget');
+          let inspectFieldsThrew = false;
+          try {
+            inspectFieldsBtn.click();
+          } catch (e) {
+            inspectFieldsThrew = true;
+          }
+          assert(!inspectFieldsThrew, 'TEST X: Inspect Vehicle Fields button click executed cleanly');
+
+          const diagRes = window.DiceAutomator.runVehicleFieldsDiagnostic(document);
+          assert(diagRes && diagRes.success === true, 'TEST X: runVehicleFieldsDiagnostic executed cleanly with success: true');
+          assert(diagRes.kmCandidatesCount >= 1, 'TEST X: Diagnostic identified Kilometers candidate fields');
+
           widgetEl.remove();
         }
 
         log('\n==================================================');
-        log('🎉 ALL TESTS (TESTS A-W) PASSED SUCCESSFULLY!');
+        log('🎉 ALL TESTS (TESTS A-X) PASSED SUCCESSFULLY!');
         log('==================================================');
 
         document.getElementById('suite-status').className = 'status-badge badge-pass';
