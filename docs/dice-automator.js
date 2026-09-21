@@ -146,7 +146,34 @@
       if (!el) return;
       const actualVal = optionValue !== null && optionValue !== undefined ? optionValue : el.value;
 
-      // 1. Standard native events
+      // Update value & selectedIndex on the native select
+      try {
+        el.value = actualVal;
+        const opts = Array.from(el.options || []);
+        const idx = opts.findIndex(o => o.value === actualVal || String(o.value) === String(actualVal));
+        if (idx !== -1) el.selectedIndex = idx;
+      } catch (e) {}
+
+      // Update corresponding Chosen UI span in real-time
+      try {
+        const matchedOpt = el.options ? el.options[el.selectedIndex] : null;
+        const optText = matchedOpt ? Utils.cleanText(matchedOpt.text) : null;
+        if (optText) {
+          const targetDoc = el.ownerDocument || doc || document;
+          if (el.id) {
+            const chosenSpans = targetDoc.querySelectorAll(
+              `#${el.id}_chzn .chosen-single span, .${el.id}_chzn .chosen-single span, #${el.id}_chosen .chosen-single span`
+            );
+            chosenSpans.forEach(span => { span.textContent = optText; });
+          }
+          const siblingSpan = el.parentElement?.querySelector('.chosen-container .chosen-single span, .chosen-single span');
+          if (siblingSpan) siblingSpan.textContent = optText;
+          const groupSpan = el.closest('.control-group, .form-group, td, tr')?.querySelector('.chosen-container .chosen-single span, .chosen-single span');
+          if (groupSpan) groupSpan.textContent = optText;
+        }
+      } catch (e) {}
+
+      // Single clean native event cascade (focus -> input -> change -> blur)
       try {
         el.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true, composed: true }));
         el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
@@ -154,107 +181,26 @@
         el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true, composed: true }));
       } catch (e) {}
 
-      // 2. Direct element inline handler
+      // If jQuery Chosen exists on the page, update it
       try {
-        if (typeof el.onchange === 'function') {
-          el.onchange.call(el);
+        const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+        const $ = win?.$ || win?.jQuery || (typeof unsafeWindow !== 'undefined' ? (unsafeWindow.$ || unsafeWindow.jQuery) : null);
+        if ($ && typeof $(el).trigger === 'function') {
+          $(el).trigger('chosen:updated').trigger('liszt:updated');
         }
       } catch (e) {}
 
-      // 3. Direct window handlers (unsafeWindow, ownerDocument.defaultView, window)
-      const pageWins = [];
+      // Only invoke getsubcat directly if no inline onchange was fired by the native change event
       try {
-        if (typeof unsafeWindow !== 'undefined' && unsafeWindow) pageWins.push(unsafeWindow);
-        const docWin = el.ownerDocument?.defaultView;
-        if (docWin && !pageWins.includes(docWin)) pageWins.push(docWin);
-        if (typeof window !== 'undefined' && window && !pageWins.includes(window)) pageWins.push(window);
-      } catch (e) {}
-
-      for (const win of pageWins) {
-        try {
-          if (typeof win.getsubcat === 'function') {
-            try { win.getsubcat(actualVal, level); } catch (e) {}
-            try { win.getsubcat(actualVal); } catch (e) {}
+        const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+        const unsafe = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
+        const hasInlineOnchange = typeof el.onchange === 'function';
+        if (!hasInlineOnchange) {
+          if (typeof win?.getsubcat === 'function') {
+            win.getsubcat(actualVal, level);
+          } else if (typeof unsafe?.getsubcat === 'function') {
+            unsafe.getsubcat(actualVal, level);
           }
-          if (typeof win.get_sub_cat === 'function') {
-            try { win.get_sub_cat(actualVal, level); } catch (e) {}
-          }
-          if (typeof win.getSubCategories === 'function') {
-            try { win.getSubCategories(actualVal, level); } catch (e) {}
-          }
-          if (typeof win.getCategoryFields === 'function') {
-            try { win.getCategoryFields(actualVal); } catch (e) {}
-          }
-        } catch (e) {}
-
-        // jQuery in page context (Chosen, Select2, standard change)
-        try {
-          const $ = win.$ || win.jQuery;
-          if ($ && typeof $(el).trigger === 'function') {
-            $(el).trigger('chosen:updated').trigger('liszt:updated').trigger('input').trigger('change').trigger('select2:select');
-          }
-        } catch (e) {}
-
-        // MooTools in page context
-        try {
-          if (win.document && typeof win.document.id === 'function') {
-            const mEl = win.document.id(el);
-            if (mEl && typeof mEl.fireEvent === 'function') {
-              mEl.fireEvent('change');
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 4. Injected Page-Context Script Dispatcher
-      // In isolated extension / userscript sandboxes, execute directly in the real page execution context
-      try {
-        const targetDoc = el.ownerDocument || doc || document;
-        const root = targetDoc.head || targetDoc.documentElement || targetDoc.body;
-        if (root) {
-          const scriptEl = targetDoc.createElement('script');
-          const elId = el.id ? JSON.stringify(el.id) : 'null';
-          const elName = el.name ? JSON.stringify(el.name) : 'null';
-          const valStr = JSON.stringify(actualVal);
-          const lvlNum = typeof level === 'number' ? level : 0;
-
-          scriptEl.textContent = `(function() {
-            try {
-              var target = null;
-              if (${elId}) target = document.getElementById(${elId});
-              if (!target && ${elName}) {
-                var formScope = document.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || document;
-                target = formScope.querySelector('select[name=' + ${elName} + ']');
-              }
-              if (!target) {
-                var formScope = document.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || document;
-                var allCats = formScope.querySelectorAll('select[name="parent_id[]"], select[name="category"], select[name="sub_category"], select[name="third_category"], .jomcl-category');
-                if (allCats && allCats[${lvlNum}]) target = allCats[${lvlNum}];
-              }
-              if (target) {
-                target.value = ${valStr};
-                if (typeof target.onchange === 'function') {
-                  try { target.onchange.call(target); } catch(e) {}
-                }
-                var ev = new Event('change', { bubbles: true, cancelable: true });
-                target.dispatchEvent(ev);
-                if (typeof window.jQuery === 'function') {
-                  try {
-                    window.jQuery(target).trigger('chosen:updated').trigger('liszt:updated').trigger('change');
-                  } catch(e) {}
-                }
-              }
-              if (typeof window.getsubcat === 'function') {
-                try { window.getsubcat(${valStr}, ${lvlNum}); } catch(e) {}
-                try { window.getsubcat(${valStr}); } catch(e) {}
-              }
-              if (typeof window.get_sub_cat === 'function') {
-                try { window.get_sub_cat(${valStr}, ${lvlNum}); } catch(e) {}
-              }
-            } catch(err) {}
-          })();`;
-          root.appendChild(scriptEl);
-          scriptEl.remove();
         }
       } catch (e) {}
     },
@@ -283,6 +229,17 @@
       return false;
     },
 
+    isPlaceholderOnly(selectEl) {
+      if (!selectEl || selectEl.tagName !== 'SELECT') return false;
+      if (!selectEl.options || selectEl.options.length === 0) return true;
+      const validOptions = Array.from(selectEl.options).filter(opt => {
+        const val = (opt.value || '').trim();
+        const txt = Utils.cleanCategoryText(opt.text).toLowerCase();
+        return val !== '' && !/^[-–—\s]*(?:select|sub\s*categor|none|choose)[-–—\s]*$/i.test(txt);
+      });
+      return validOptions.length === 0;
+    },
+
     getListingForm(doc) {
       if (!doc) doc = document;
       return doc.querySelector('form#adminForm, form.form-validate, form[name="adminForm"], #adminForm, #jomcl_item_form, #legacy-vehicle-form, #dice-vehicle-form') || doc;
@@ -295,42 +252,24 @@
       if (!doc) doc = document;
       const form = this.getListingForm(doc);
 
+      // 1. Direct explicit level ID / slot queries
       if (level === 0) {
-        return form.querySelector('#parent_id_0') ||
-               form.querySelector('#category') ||
-               form.querySelector('#target_category') ||
-               form.querySelector('#category_div select') ||
-               form.querySelector('select#catid') ||
-               form.querySelector('select[name="catid"]') ||
-               form.querySelector('select[name="category"]') ||
-               form.querySelector('#jform_category') ||
-               form.querySelectorAll('select[name="parent_id[]"]')[0] ||
-               form.querySelectorAll('.jomcl-category')[0] ||
-               null;
+        const direct = form.querySelector('#parent_id_0, #category, #target_category, #category_div select, select#catid, #jform_category');
+        if (direct && !this.isPlaceholderOnly(direct)) return direct;
       } else if (level === 1) {
-        return form.querySelector('#parent_id_1') ||
-               form.querySelector('#sub_category') ||
-               form.querySelector('#target_sub_category') ||
-               form.querySelector('#target_cars_parts') ||
-               form.querySelector('#sub_category_div select') ||
-               form.querySelector('#cat_id_2') ||
-               form.querySelector('select[name="sub_category"]') ||
-               form.querySelectorAll('select[name="parent_id[]"]')[1] ||
-               form.querySelectorAll('.jomcl-category')[1] ||
-               null;
+        const direct = form.querySelector('#parent_id_1, #sub_category, #target_sub_category, #target_cars_parts, #sub_category_div select, #subcat_1 select, #cat_id_2');
+        if (direct && !this.isPlaceholderOnly(direct)) return direct;
       } else if (level === 2) {
-        return form.querySelector('#parent_id_2') ||
-               form.querySelector('#sub_sub_category') ||
-               form.querySelector('#target_used_cars_sa') ||
-               form.querySelector('#third_category') ||
-               form.querySelector('#sub_sub_category_div select') ||
-               form.querySelector('#cat_id_3') ||
-               form.querySelector('select[name="third_category"]') ||
-               form.querySelectorAll('select[name="parent_id[]"]')[2] ||
-               form.querySelectorAll('.jomcl-category')[2] ||
-               null;
+        const direct = form.querySelector('#parent_id_2, #sub_sub_category, #target_used_cars_sa, #third_category, #sub_sub_category_div select, #subcat_2 select, #cat_id_3');
+        if (direct && !this.isPlaceholderOnly(direct)) return direct;
       }
-      return null;
+
+      // 2. Query all parent_id[] / jomcl-category selects, filtering out empty placeholders
+      const allParentSelects = Array.from(form.querySelectorAll('select[name="parent_id[]"], select.jomcl-category, select[name*="cat"]'));
+      const activeSelects = allParentSelects.filter(s => !this.isPlaceholderOnly(s));
+      if (activeSelects[level]) return activeSelects[level];
+
+      return allParentSelects[level] || null;
     },
 
     /**
@@ -434,6 +373,9 @@
      */
     findDropdownForLevel(doc, level, targetMatcher, fallbackCriteria = {}) {
       if (!doc) doc = document;
+      const form = this.getListingForm(doc);
+
+      // Check specific level select first
       const levelSelect = this.getCategorySelect(doc, level);
       if (levelSelect && this.isValidSelectElement(levelSelect)) {
         const opts = this.getOptions(levelSelect);
@@ -446,10 +388,26 @@
             level: level
           };
         }
-        // If dedicated level select exists for this level, don't leak to other levels
-        return null;
       }
-      return this.findDropdownWithOption(doc, targetMatcher, fallbackCriteria);
+
+      // Scan all non-placeholder selects inside the listing form
+      const candidates = Array.from(form.querySelectorAll('select[name="parent_id[]"], select.jomcl-category, select[name*="cat"]'))
+        .filter(s => !this.isPlaceholderOnly(s));
+
+      for (const ctrl of candidates) {
+        const opts = this.getOptions(ctrl);
+        const matched = this.matchOption(opts, targetMatcher);
+        if (matched) {
+          return {
+            control: ctrl,
+            option: matched,
+            allOptions: opts,
+            level: level
+          };
+        }
+      }
+
+      return null;
     },
 
     /**
@@ -608,11 +566,28 @@
           Utils.triggerEvents(control);
         }
 
-        // Update adjacent Chosen UI span if present
-        const chosenSpan = control.parentElement?.querySelector('.chosen-container .chosen-single span, .chosen-container a span') ||
-                           (control.id ? (control.ownerDocument || doc || document).querySelector(`#${control.id}_chzn .chosen-single span`) : null);
-        if (chosenSpan) {
-          chosenSpan.textContent = matched.text;
+        // Update all related Chosen UI elements in DOM
+        const targetText = matched.text;
+        const targetDoc = control.ownerDocument || doc || document;
+        if (control.id) {
+          const relatedSpans = targetDoc.querySelectorAll(
+            `#${control.id}_chzn .chosen-single span, .${control.id}_chzn .chosen-single span, #${control.id}_chosen .chosen-single span`
+          );
+          relatedSpans.forEach(s => { s.textContent = targetText; });
+        }
+        const parentSpan = control.parentElement?.querySelector('.chosen-container .chosen-single span, .chosen-single span');
+        if (parentSpan) parentSpan.textContent = targetText;
+        const groupSpan = control.closest('.control-group, .form-group, td, tr')?.querySelector('.chosen-container .chosen-single span, .chosen-single span');
+        if (groupSpan) groupSpan.textContent = targetText;
+
+        // Check visible chosen text if a chosen container exists for this control
+        let visibleChosenText = '';
+        if (control.id) {
+          const chosenEl = targetDoc.querySelector(`#${control.id}_chzn .chosen-single span, .${control.id}_chzn .chosen-single span, #${control.id}_chosen .chosen-single span`);
+          if (chosenEl) visibleChosenText = Utils.cleanCategoryText(chosenEl.textContent);
+        }
+        if (!visibleChosenText && parentSpan) {
+          visibleChosenText = Utils.cleanCategoryText(parentSpan.textContent);
         }
 
         // Verify actual selection:
@@ -630,7 +605,8 @@
             success: false,
             error: `Selection verification failed. Expected value "${matched.value}", actual selected: text "${actualText}", value "${actualValue}"`,
             selectedText: actualText,
-            selectedValue: actualValue
+            selectedValue: actualValue,
+            visibleChosenText
           };
         }
 
@@ -638,6 +614,7 @@
           success: true,
           selectedText: matched.text,
           selectedValue: actualValue,
+          visibleChosenText: visibleChosenText || matched.text,
           availableOptions: options.map(o => o.text)
         };
       }

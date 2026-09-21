@@ -665,8 +665,128 @@
           widgetEl.remove();
         }
 
+        log('\n=== TESTS Y - AC: CATEGORY HIERARCHY, PLACEHOLDER HANDLING & CHOSEN SYNC ===');
+
+        // TEST Y: Category Visible UI (Chosen UI synchronization)
+        // Verify that native select value and Chosen UI text match
+        const cat0Select = document.getElementById('parent_id_0');
+        const cat0ChosenSpan = document.querySelector('#parent_id_0_chzn .chosen-single span');
+        assert(cat0Select.value === '12', 'TEST Y: Native Category select value is 12');
+        assert(cat0ChosenSpan && cat0ChosenSpan.textContent.includes('Vehicles'), 'TEST Y: Visible Chosen text reflects "Vehicles (0)"');
+
+        // TEST Z: Multiple parent_id[] controls in DOM (Simulating live structure with 5+ parent_id[] elements)
+        const multiCatContainer = document.createElement('div');
+        multiCatContainer.id = 'multi-cat-test-container';
+        multiCatContainer.innerHTML = `
+          <form id="multiCatForm">
+            <!-- Root select -->
+            <select name="parent_id[]" id="test_cat_0">
+              <option value="">- Select a category -</option>
+              <option value="12">Vehicles (0)</option>
+            </select>
+            <!-- 4 placeholder dependent selects (like in the screenshot) -->
+            <select name="parent_id[]" id="test_placeholder_1">
+              <option value="">- Sub categories -</option>
+            </select>
+            <select name="parent_id[]" id="test_placeholder_2">
+              <option value="">- Sub categories -</option>
+            </select>
+            <select name="parent_id[]" id="test_placeholder_3">
+              <option value="">- Sub categories -</option>
+            </select>
+            <select name="parent_id[]" id="test_placeholder_4">
+              <option value="">- Sub categories -</option>
+            </select>
+            <!-- Active 2nd level select -->
+            <select name="parent_id[]" id="test_active_subcat">
+              <option value="">- Sub categories -</option>
+              <option value="20">Cars - Parts</option>
+            </select>
+            <!-- Active 3rd level select -->
+            <select name="parent_id[]" id="test_active_thirdcat">
+              <option value="">- Sub categories -</option>
+              <option value="36">Used cars in South Africa</option>
+            </select>
+          </form>
+        `;
+        document.body.appendChild(multiCatContainer);
+
+        const foundSub = window.DiceAutomator.DropdownManager.findDropdownForLevel(
+          multiCatContainer,
+          1,
+          'Cars - Parts'
+        );
+        assert(foundSub && foundSub.control.id === 'test_active_subcat', 'TEST Z: findDropdownForLevel bypassed 4 empty placeholder selects and found active Sub Category');
+
+        const foundThird = window.DiceAutomator.DropdownManager.findDropdownForLevel(
+          multiCatContainer,
+          2,
+          'Used cars in South Africa'
+        );
+        assert(foundThird && foundThird.control.id === 'test_active_thirdcat', 'TEST Z: findDropdownForLevel found active Third Level select among multiple parent_id[] controls');
+
+        // TEST AA: Placeholder controls ignored
+        const placeholderEl = document.getElementById('test_placeholder_1');
+        assert(window.DiceAutomator.DropdownManager.isPlaceholderOnly(placeholderEl) === true, 'TEST AA: isPlaceholderOnly returns true for placeholder-only dropdown');
+        assert(window.DiceAutomator.DropdownManager.isPlaceholderOnly(document.getElementById('test_active_subcat')) === false, 'TEST AA: isPlaceholderOnly returns false for populated dropdown');
+
+        // TEST AB: Sequential dynamic category selection
+        // Verify selectAndVerify on level 0, 1, 2 sequentially
+        const selRes0 = window.DiceAutomator.DropdownManager.selectAndVerify(
+          document.getElementById('test_cat_0'),
+          'Vehicles (0)',
+          0,
+          multiCatContainer
+        );
+        assert(selRes0.success === true && selRes0.selectedValue === '12', 'TEST AB: Step 1 (Vehicles) selected & verified');
+
+        const selRes1 = window.DiceAutomator.DropdownManager.selectAndVerify(
+          document.getElementById('test_active_subcat'),
+          'Cars - Parts',
+          1,
+          multiCatContainer
+        );
+        assert(selRes1.success === true && selRes1.selectedValue === '20', 'TEST AB: Step 2 (Cars - Parts) selected & verified');
+
+        const selRes2 = window.DiceAutomator.DropdownManager.selectAndVerify(
+          document.getElementById('test_active_thirdcat'),
+          'Used cars in South Africa',
+          2,
+          multiCatContainer
+        );
+        assert(selRes2.success === true && selRes2.selectedValue === '36', 'TEST AB: Step 3 (Used cars in South Africa) selected & verified');
+
+        // TEST AC: Chosen / native synchronization
+        const chosenTestWrapper = document.createElement('div');
+        chosenTestWrapper.innerHTML = `
+          <div class="control-group">
+            <select name="parent_id[]" id="test_chosen_sync">
+              <option value="">- Select a category -</option>
+              <option value="12">Vehicles (0)</option>
+              <option value="99">Commercial</option>
+            </select>
+            <div class="chosen-container" id="test_chosen_sync_chzn">
+              <a class="chosen-single"><span>- Select a category -</span></a>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(chosenTestWrapper);
+        const syncSelect = document.getElementById('test_chosen_sync');
+        const syncSpan = document.querySelector('#test_chosen_sync_chzn .chosen-single span');
+
+        const syncRes = window.DiceAutomator.DropdownManager.selectAndVerify(syncSelect, 'Vehicles (0)', 0, chosenTestWrapper);
+        assert(syncRes.success === true, 'TEST AC: selectAndVerify returned success');
+        assert(syncSelect.value === '12', 'TEST AC: Native select value is 12');
+        assert(syncSelect.options[syncSelect.selectedIndex].text === 'Vehicles (0)', 'TEST AC: Native selected option text is Vehicles (0)');
+        assert(syncSpan.textContent === 'Vehicles (0)', 'TEST AC: Visible Chosen UI text is synchronized to "Vehicles (0)"');
+        assert(syncRes.visibleChosenText === 'Vehicles (0)', 'TEST AC: Result visibleChosenText confirms synchronization');
+
+        // Clean up temporary test nodes
+        multiCatContainer.remove();
+        chosenTestWrapper.remove();
+
         log('\n==================================================');
-        log('🎉 ALL TESTS (TESTS A-X) PASSED SUCCESSFULLY!');
+        log('🎉 ALL TESTS (TESTS A-AC) PASSED SUCCESSFULLY!');
         log('==================================================');
 
         document.getElementById('suite-status').className = 'status-badge badge-pass';

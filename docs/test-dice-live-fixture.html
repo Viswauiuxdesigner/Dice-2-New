@@ -272,10 +272,33 @@
     }
 
     // Dynamic injection of Sub Category (Level 1)
-    function injectSubCategoryDOM() {
+    // Dynamic injection of Sub Category (Level 1)
+    function injectSubCategoryDOM(includePlaceholders = false) {
       const slot = document.getElementById('sub_category_slot');
       if (!slot) return;
+      let placeholderHtml = '';
+      if (includePlaceholders) {
+        placeholderHtml = `
+          <div class="control-group" id="placeholder_sub_1_div">
+            <select name="parent_id[]" id="placeholder_sub_1" class="inputbox jomcl-category">
+              <option value="">- Sub categories -</option>
+            </select>
+            <div class="chosen-container chosen-container-single">
+              <a class="chosen-single"><span>- Sub categories -</span></a>
+            </div>
+          </div>
+          <div class="control-group" id="placeholder_sub_2_div">
+            <select name="parent_id[]" id="placeholder_sub_2" class="inputbox jomcl-category">
+              <option value="">- Sub categories -</option>
+            </select>
+            <div class="chosen-container chosen-container-single">
+              <a class="chosen-single"><span>- Sub categories -</span></a>
+            </div>
+          </div>
+        `;
+      }
       slot.innerHTML = `
+        ${placeholderHtml}
         <div class="control-group" id="sub_category_div">
           <label class="control-label" for="parent_id_1">Sub Category <span class="required">*</span></label>
           <select id="parent_id_1" name="parent_id[]" class="inputbox jomcl-category chzn-done" onchange="getsubcat(this.value, 1);">
@@ -299,10 +322,32 @@
     }
 
     // Dynamic injection of Third Level Category (Level 2)
-    function injectThirdLevelDOM() {
+    function injectThirdLevelDOM(includePlaceholders = false) {
       const slot = document.getElementById('third_category_slot');
       if (!slot) return;
+      let placeholderHtml = '';
+      if (includePlaceholders) {
+        placeholderHtml = `
+          <div class="control-group" id="placeholder_third_1_div">
+            <select name="parent_id[]" id="placeholder_third_1" class="inputbox jomcl-category">
+              <option value="">- Sub categories -</option>
+            </select>
+            <div class="chosen-container chosen-container-single">
+              <a class="chosen-single"><span>- Sub categories -</span></a>
+            </div>
+          </div>
+          <div class="control-group" id="placeholder_third_2_div">
+            <select name="parent_id[]" id="placeholder_third_2" class="inputbox jomcl-category">
+              <option value="">- Sub categories -</option>
+            </select>
+            <div class="chosen-container chosen-container-single">
+              <a class="chosen-single"><span>- Sub categories -</span></a>
+            </div>
+          </div>
+        `;
+      }
       slot.innerHTML = `
+        ${placeholderHtml}
         <div class="control-group" id="sub_sub_category_div">
           <label class="control-label" for="parent_id_2">Third-level Sub Category <span class="required">*</span></label>
           <select id="parent_id_2" name="parent_id[]" class="inputbox jomcl-category chzn-done" onchange="getsubcat(this.value, 2);">
@@ -331,7 +376,7 @@
       if (!container) return;
 
       let kmFieldHtml = '';
-      if (variant === 'standard' || variant === 'caseA') {
+      if (variant === 'standard' || variant === 'caseA' || variant === 'multi-placeholder') {
         // CASE A: label + input[name="fields[mileage]"] with Joomla popover
         kmFieldHtml = `
           <div class="control-group">
@@ -1018,6 +1063,40 @@ OUTER HTML: ${el ? el.outerHTML : 'none'}`;
           assert(targetKmInp && targetKmInp.value === '100 km', `Variant [${variant}]: Kilometers field correctly discovered & populated`);
           assert(document.getElementById('dealer_notes_mileage_ref').value === '', `Variant [${variant}]: Decoy field untouched`);
         }
+
+        // ================================================================
+        // MULTI-PLACEHOLDER SEQUENTIAL SCENARIO (LIVE SCREENSHOT REPRODUCTION)
+        // ================================================================
+        log('\n=== TESTING MULTI-PLACEHOLDER SEQUENTIAL SCENARIO (SCREENSHOT REPRODUCTION) ===');
+        log('Resetting fixture to multi-placeholder mode (multiple dummy parent_id[] slots)...');
+        window.__currentFixtureVariant = 'multi-placeholder';
+        
+        // Reset Category 0 controls
+        document.getElementById('parent_id_0').innerHTML = '<option value="">- Select a category -</option><option value="12">Vehicles (0)</option><option value="15">Property</option>';
+        document.getElementById('parent_id_0').value = '';
+        updateChosen('parent_id_0', '- Select a category -');
+        document.getElementById('sub_category_slot').innerHTML = '';
+        document.getElementById('third_category_slot').innerHTML = '';
+        const vContainer = document.getElementById('dice-vehicle-fields-container');
+        if (vContainer) { vContainer.innerHTML = ''; vContainer.style.display = 'none'; }
+        document.getElementById('title').value = '';
+
+        log('Running DiceAutomator.fillForm on multi-placeholder DOM structure...');
+        const multiResult = await window.DiceAutomator.fillForm(document, { fields: baicPayload }, {
+          stepDelayMs: 30,
+          maxWaitMs: 3000,
+          pollIntervalMs: 30,
+          logCallback: (m) => log('  [MultiPlaceholderAutomator] ' + m)
+        });
+
+        assert(multiResult.success === true, 'Multi-placeholder flow succeeded');
+        assert(document.getElementById('parent_id_0').value === '12', 'Multi-placeholder: Native Category = 12');
+        assert(getChosenText('parent_id_0').includes('Vehicles'), 'Multi-placeholder: Visible Category = Vehicles (0)');
+        assert(document.getElementById('parent_id_1')?.value === '20', 'Multi-placeholder: Native Sub Category = 20');
+        assert(getChosenText('parent_id_1').includes('Cars - Parts'), 'Multi-placeholder: Visible Sub Category = Cars - Parts');
+        assert(document.getElementById('parent_id_2')?.value === '36', 'Multi-placeholder: Native Third Level = 36');
+        assert(getChosenText('parent_id_2').includes('Used cars in South Africa'), 'Multi-placeholder: Visible Third Level = Used cars in South Africa');
+        assert(document.getElementById('jform_field_year')?.value === '2026', 'Multi-placeholder: Year field = 2026');
 
         log('\n========================================');
         log('🎉 ALL SEQUENTIAL FIXTURE TESTS PASSED PERFECTLY!');
