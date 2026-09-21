@@ -1676,8 +1676,8 @@
         // Verification checks for all filled fields
         const fieldVerificationList = [
           { key: 'title', label: 'Title', selectors: ['#target_vehicle_title', '#target_title', '#title', 'input[name="title"]', 'input[name="advert_title"]'] },
-          { key: 'year', label: 'Year', selectors: ['#target_year', '#year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
-          { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name*="kilometer"]', 'input[name*="mileage"]'] },
+          { key: 'year', label: 'Year', selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]'] },
+          { key: 'kilometersDriven', label: 'Kilometers Driven', selectors: ['#target_kilometers_driven', '#target_mileage', '#kilometers_driven', '#mileage', '#odometer', '#jform_field_mileage', 'input[name="kilometers_driven"]', 'input[name="mileage"]', 'input[name="odometer"]', 'input[name="fields[kilometers_driven]"]', 'input[name="fields[mileage]"]', 'input[name="fields[odometer]"]'] },
           { key: 'price', label: 'Price', selectors: ['form#adminForm input[name="price"]', '#target_price', '#price', 'input[name="price"]', 'input[name="target_price"]'], isPrice: true }
         ];
 
@@ -1695,6 +1695,25 @@
               el = targetDoc.querySelector(sel);
               if (el) break;
             } catch (e) {}
+          }
+
+          // Semantic label fallback for dynamic custom fields
+          if (!el && item.key === 'kilometersDriven') {
+            const allLabels = targetDoc.querySelectorAll('label, .control-label, .form-label, span.hasPopover, span.hasTooltip, div.control-label');
+            for (const lbl of allLabels) {
+              const lText = ((lbl.textContent || '') + ' ' + (lbl.getAttribute('title') || '') + ' ' + (lbl.getAttribute('data-content') || '')).replace(/\s+/g, ' ').trim();
+              if (/^kilometers(?:\s+driven)?\s*\*?$/i.test(lText) || /\bkilometers\s*driven\b/i.test(lText)) {
+                const forId = lbl.getAttribute('for');
+                if (forId) {
+                  el = targetDoc.getElementById(forId) || targetDoc.querySelector('#' + CSS.escape(forId));
+                }
+                if (!el) {
+                  const container = lbl.closest('.form-group, .control-group, tr, td, fieldset') || lbl.parentElement;
+                  if (container) el = container.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"])');
+                }
+                if (el) break;
+              }
+            }
           }
 
           const actualVal = el ? Utils.cleanText(el.value) : '';
