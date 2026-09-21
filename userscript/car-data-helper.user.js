@@ -2371,9 +2371,9 @@
       // 3. YEAR
       if (isClean(fields.year)) {
         const el = findFieldElement({
-          selectors: ['#target_year', '#year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]', 'input[name="target_year"]'],
-          labels: [/^year\s*\*?$/i, /^year of manufacture\s*\*?$/i],
-          names: ['year', 'target_year']
+          selectors: ['#target_year', '#year', '#jform_field_year', 'input[name="year"]', 'input[name="fields[year]"]', 'input[name*="year"]', 'input[name="target_year"]'],
+          labels: [/^year\s*\*?$/i, /^year of manufacture\s*\*?$/i, /\byear\b/i],
+          names: ['year', 'target_year', 'fields[year]']
         });
         if (el) { el.value = fields.year; triggerEvents(el); }
       }
@@ -2391,9 +2391,9 @@
       // 5. TRANSMISSION
       if (isClean(fields.transmission)) {
         const el = findFieldElement({
-          selectors: ['#target_transmission_input', '#target_transmission', '#transmission', 'input[name="transmission"]', 'input[name="fields[transmission]"]', 'input[name*="transmission"]'],
-          labels: [/^transmission\s*\*?$/i],
-          names: ['transmission', 'target_transmission']
+          selectors: ['#target_transmission_input', '#target_transmission', '#transmission', '#jform_field_transmission', 'input[name="transmission"]', 'input[name="fields[transmission]"]', 'input[name*="transmission"]'],
+          labels: [/^transmission\s*\*?$/i, /\btransmission\b/i],
+          names: ['transmission', 'target_transmission', 'fields[transmission]']
         });
         if (el) { el.value = fields.transmission; triggerEvents(el); }
       }
@@ -2401,9 +2401,9 @@
       // 6. FUEL
       if (isClean(fields.fuel)) {
         const el = findFieldElement({
-          selectors: ['#target_fuel_input', '#target_fuel', '#fuel', 'input[name="fuel"]', 'input[name="fields[fuel]"]', 'input[name*="fuel"]'],
-          labels: [/^fuel\s*\*?$/i, /^fuel type\s*\*?$/i],
-          names: ['fuel', 'target_fuel']
+          selectors: ['#target_fuel_input', '#target_fuel', '#fuel', '#jform_field_fuel', 'input[name="fuel"]', 'input[name="fields[fuel]"]', 'input[name*="fuel"]'],
+          labels: [/^fuel\s*\*?$/i, /^fuel type\s*\*?$/i, /\bfuel\b/i],
+          names: ['fuel', 'target_fuel', 'fields[fuel]']
         });
         if (el) { el.value = fields.fuel; triggerEvents(el); }
       }
@@ -2411,9 +2411,9 @@
       // 7. 4x2 / 4x4 (DRIVETRAIN)
       if (isClean(fields.drivetrain)) {
         const el = findFieldElement({
-          selectors: ['#target_drivetrain', '#drivetrain', 'input[name="drivetrain"]', 'input[name="fields[drivetrain]"]', 'input[name*="drivetrain"]', 'input[name*="4x"]'],
-          labels: [/^4x2\s*\/\s*4x4\s*\*?$/i, /^drivetrain\s*\*?$/i],
-          names: ['drivetrain', 'target_drivetrain']
+          selectors: ['#target_drivetrain', '#drivetrain', '#jform_field_drivetrain', 'input[name="drivetrain"]', 'input[name="fields[drivetrain]"]', 'input[name*="drivetrain"]', 'input[name*="4x"]'],
+          labels: [/^4x2\s*\/\s*4x4\s*\*?$/i, /^drivetrain\s*\*?$/i, /\b4x[24]\b/i, /\bdrivetrain\b/i],
+          names: ['drivetrain', 'target_drivetrain', 'fields[drivetrain]']
         });
         if (el) { el.value = fields.drivetrain; triggerEvents(el); }
       }
@@ -2421,9 +2421,9 @@
       // 8. BODY COLOUR
       if (isClean(fields.bodyColor)) {
         const el = findFieldElement({
-          selectors: ['#target_body_colour', '#target_body_color', '#body_colour', '#body_color', '#colour', '#color', 'input[name="body_colour"]', 'input[name="body_color"]', 'input[name="fields[body_colour]"]', 'input[name*="colour"]', 'input[name*="color"]'],
-          labels: [/^body colou?r\s*\*?$/i, /^colou?r\s*\*?$/i],
-          names: ['body_colour', 'body_color', 'target_body_colour']
+          selectors: ['#target_body_colour', '#target_body_color', '#body_colour', '#body_color', '#colour', '#color', '#jform_field_body_colour', 'input[name="body_colour"]', 'input[name="body_color"]', 'input[name="fields[body_colour]"]', 'input[name*="colour"]', 'input[name*="color"]'],
+          labels: [/^body colou?r\s*\*?$/i, /^colou?r\s*\*?$/i, /\bbody\s+colou?r\b/i],
+          names: ['body_colour', 'body_color', 'target_body_colour', 'fields[body_colour]']
         });
         if (el) { el.value = fields.bodyColor; triggerEvents(el); }
       }
@@ -2449,15 +2449,16 @@
           // 1. Direct real custom field selectors (JomClassifieds / Joomla #fields_45, custom field names, test harness)
           const directSelectors = [
             '#fields_45',
+            '#jform_field_condition',
+            'input[name="fields[condition]"]',
+            'textarea[name="fields[condition]"]',
             'input[name="fields[45]"]',
             'textarea[name="fields[45]"]',
             'select[name="fields[45]"]',
             '#target_condition_input',
             'input[name="target_condition_input"]',
             '#target_condition_text',
-            'input[name="target_condition_text"]',
-            'input[name="fields[condition]"]',
-            'textarea[name="fields[condition]"]'
+            'input[name="target_condition_text"]'
           ];
           for (const sel of directSelectors) {
             try {
@@ -2497,7 +2498,6 @@
           }
 
           if (candidateElements.length > 0) {
-            // Return the first eligible non-first condition element
             return candidateElements[0];
           }
 
@@ -2539,12 +2539,57 @@
         }
       }
 
+      // 9B. SEATS
+      if (isClean(fields.seats)) {
+        const el = findFieldElement({
+          selectors: ['#target_seats', '#seats', '#jform_field_seats', 'input[name="seats"]', 'input[name="fields[seats]"]', 'input[name*="seat"]'],
+          labels: [/^seats?\s*\*?$/i, /^number of seats\s*\*?$/i, /\bseats?\b/i],
+          names: ['seats', 'target_seats', 'fields[seats]']
+        });
+        if (el) { el.value = fields.seats; triggerEvents(el); }
+      }
+
+      // 9C. SELLER TYPE
+      if (isClean(fields.sellerType)) {
+        const el = findFieldElement({
+          selectors: ['#target_seller_type', '#seller_type', '#jform_field_seller_type', 'select[name="seller_type"]', 'select[name="fields[seller_type]"]', 'input[name="seller_type"]'],
+          labels: [/^seller\s*type\s*\*?$/i, /\bseller\s+type\b/i],
+          names: ['seller_type', 'target_seller_type', 'fields[seller_type]'],
+          allowSelect: true
+        });
+        if (el) {
+          if (el.tagName === 'SELECT') {
+            const searchVal = String(fields.sellerType).toLowerCase();
+            for (let i = 0; i < el.options.length; i++) {
+              const opt = el.options[i];
+              if (opt.value.toLowerCase() === searchVal || opt.text.toLowerCase().includes(searchVal)) {
+                el.selectedIndex = i;
+                break;
+              }
+            }
+          } else {
+            el.value = fields.sellerType;
+          }
+          triggerEvents(el);
+        }
+      }
+
+      // 9D. DATE
+      if (isClean(fields.date)) {
+        const el = findFieldElement({
+          selectors: ['#target_date', '#date', '#jform_field_date', 'input[name="date"]', 'input[name="fields[date]"]'],
+          labels: [/^date\s*\*?$/i, /\bdate\b/i],
+          names: ['date', 'target_date', 'fields[date]']
+        });
+        if (el) { el.value = fields.date; triggerEvents(el); }
+      }
+
       // 10. PRICING SUMMARY
       if (isClean(fields.pricingSummary)) {
         const el = findFieldElement({
-          selectors: ['#target_pricing_summary', '#pricing_summary', '#price_summary', 'input[name*="pricing_summary"]', 'input[name*="price_summary"]'],
+          selectors: ['#target_pricing_summary', '#pricing_summary', '#price_summary', '#jform_field_pricing_summary', 'input[name="fields[pricing_summary]"]', 'input[name*="pricing_summary"]', 'input[name*="price_summary"]'],
           labels: [/^pricing summary\s*\*?$/i, /\bpricing\s+summary\b/i],
-          names: ['pricing_summary', 'target_pricing_summary']
+          names: ['pricing_summary', 'target_pricing_summary', 'fields[pricing_summary]']
         });
         if (el) { el.value = fields.pricingSummary; triggerEvents(el); }
       }
@@ -2552,9 +2597,9 @@
       // 11. DEALER NAME
       if (isClean(fields.dealerName)) {
         const el = findFieldElement({
-          selectors: ['#target_dealer_name', '#dealer_name', 'input[name*="dealer_name"]'],
+          selectors: ['#target_dealer_name', '#dealer_name', '#jform_field_dealer_name', 'input[name="fields[dealer_name]"]', 'input[name*="dealer_name"]'],
           labels: [/^dealer(?:ship)? name\s*\*?$/i, /\bdealer(?:ship)?\s+name\b/i],
-          names: ['dealer_name', 'target_dealer_name']
+          names: ['dealer_name', 'target_dealer_name', 'fields[dealer_name]']
         });
         if (el) { el.value = fields.dealerName; triggerEvents(el); }
       }
@@ -2562,9 +2607,9 @@
       // 12. DEALER ADDRESS (Target Dealer Address field)
       if (isClean(fields.dealerAddress)) {
         const el = findFieldElement({
-          selectors: ['#target_dealer_address', '#dealer_address', 'input[name="dealer_address"]', 'input[name*="dealer_address"]'],
+          selectors: ['#target_dealer_address', '#dealer_address', '#jform_field_dealer_address', 'input[name="fields[dealer_address]"]', 'input[name="dealer_address"]', 'input[name*="dealer_address"]'],
           labels: [/^dealer(?:ship)? address\s*\*?$/i, /\bdealer(?:ship)?\s+address\b/i],
-          names: ['dealer_address', 'target_dealer_address']
+          names: ['dealer_address', 'target_dealer_address', 'fields[dealer_address]']
         });
         if (el) { el.value = fields.dealerAddress; triggerEvents(el); }
       }
@@ -2646,9 +2691,11 @@
           // 1. Direct selectors
           const directSelectors = [
             '#target_contact_number',
+            '#jform_field_contact_number',
             'input[name="target_contact_number"]',
             '#contact_number',
             'input[name="contact_number"]',
+            'input[name="fields[contact_number]"]',
             '#contact-number',
             'input[name="contact-number"]',
             '#phone',
@@ -2702,13 +2749,14 @@
       }
 
       // 13. DEALER AVERAGE RATING
-      if (isClean(fields.averageRating)) {
+      if (isClean(fields.averageRating) || isClean(fields.dealerAverageRating) || isClean(fields.dealerRating)) {
+        const ratingVal = fields.dealerAverageRating || fields.averageRating || fields.dealerRating;
         const el = findFieldElement({
-          selectors: ['#target_dealer_rating', '#dealer_rating', '#average_rating', 'input[name*="dealer_rating"]', 'input[name*="average_rating"]'],
+          selectors: ['#target_dealer_rating', '#dealer_rating', '#average_rating', '#jform_field_dealer_rating', 'input[name="fields[dealer_rating]"]', 'input[name*="dealer_rating"]', 'input[name*="average_rating"]'],
           labels: [/^dealer (?:average )?rating\s*(?:\(1-5\))?\s*\*?$/i, /^average rating\s*\*?$/i, /\bdealer\s+(?:average\s+)?rating\b/i],
-          names: ['dealer_rating', 'average_rating', 'target_dealer_rating']
+          names: ['dealer_rating', 'average_rating', 'target_dealer_rating', 'fields[dealer_rating]']
         });
-        if (el) { el.value = fields.averageRating; triggerEvents(el); }
+        if (el) { el.value = ratingVal; triggerEvents(el); }
       }
 
       // 14. FEATURES (Textarea / Input - exact preservation of internal word spacing and newlines)
@@ -2732,6 +2780,8 @@
             '#target_features_text',
             '#target_features',
             '#features',
+            '#jform_field_features',
+            'textarea#jform_field_features',
             'textarea[name="target_features_text"]',
             'textarea[name="target_features"]',
             'textarea[name="features"]',
@@ -2739,6 +2789,8 @@
             'textarea[name="fields[Features]"]',
             'input#target_features_text',
             'input#target_features',
+            'input#jform_field_features',
+            'input[name="fields[features]"]',
             'input[name="target_features_text"]',
             'input[name="target_features"]'
           ];
@@ -2815,24 +2867,31 @@
       }
 
       // 15. SOURCE LINK
-      if (isClean(fields.sourceUrl)) {
+      if (isClean(fields.sourceUrl) || isClean(fields.sourceLink)) {
+        const srcVal = fields.sourceUrl || fields.sourceLink;
         const el = findFieldElement({
-          selectors: ['#target_source_url', '#target_source_link', '#source_url', '#source_link', 'input[name*="source_link"]', 'input[name*="source_url"]'],
+          selectors: ['#target_source_url', '#target_source_link', '#source_url', '#source_link', '#jform_field_source_link', 'input[name="fields[source_link]"]', 'input[name*="source_link"]', 'input[name*="source_url"]'],
           labels: [/^source link\s*\*?$/i, /^source listing link\s*\*?$/i, /\bsource\s+(?:listing\s+)?link\b/i, /\bsource\s+url\b/i],
-          names: ['source_link', 'source_url', 'target_source_url']
+          names: ['source_link', 'source_url', 'target_source_url', 'fields[source_link]']
         });
-        if (el) { el.value = fields.sourceUrl; triggerEvents(el); }
+        if (el) { el.value = srcVal; triggerEvents(el); }
       }
 
       // 16. VEHICLE HIGHLIGHTS (Textarea - receives ONLY Vehicle Highlights data)
       if (isClean(fields.vehicleHighlights)) {
         const findVehicleHighlightsElement = () => {
-          // Direct textarea selectors
+          // Direct textarea / input selectors
           const directSelectors = [
             'textarea#target_vehicle_highlights',
             'textarea#vehicle_highlights',
             'textarea[name="target_vehicle_highlights"]',
-            'textarea[name="vehicle_highlights"]'
+            'textarea[name="vehicle_highlights"]',
+            'textarea#jform_field_highlights',
+            'textarea[name="fields[highlights]"]',
+            'input#jform_field_highlights',
+            'input[name="fields[highlights]"]',
+            'input#target_vehicle_highlights',
+            'input#vehicle_highlights'
           ];
           for (const sel of directSelectors) {
             try {
@@ -2853,7 +2912,7 @@
               }
               const container = lbl.closest('.control-group, .form-group, .demo-form-group, tr, td, .form-item') || lbl.parentElement;
               if (container) {
-                const siblingTextarea = container.querySelector('textarea');
+                const siblingTextarea = container.querySelector('textarea, input:not([type="hidden"]):not([type="submit"]):not([type="button"])');
                 if (siblingTextarea && this.isSafeEditable(siblingTextarea, false)) return siblingTextarea;
               }
             }
@@ -2898,8 +2957,7 @@
         return false;
       }
       const excludedKeywords = [
-        'category', 'used_or_new', 'used_cars', 'seat', 'contact_number', 'phone',
-        'currency', 'tag', 'country'
+        'category', 'used_or_new', 'used_cars'
       ];
       if (excludedKeywords.some(kw => idOrName.includes(kw))) {
         return false;

@@ -13,13 +13,13 @@
       padding: 16px;
     }
     .page-container {
-      max-width: 960px;
+      max-width: 1040px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: 1fr 360px;
+      grid-template-columns: 1fr 380px;
       gap: 20px;
     }
-    @media (max-width: 860px) {
+    @media (max-width: 900px) {
       .page-container { grid-template-columns: 1fr; }
     }
     .form-card {
@@ -42,9 +42,10 @@
       gap: 8px;
     }
     .section-title {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: #334155;
+      margin-top: 20px;
       margin-bottom: 14px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -61,7 +62,7 @@
       color: #475569;
       margin-bottom: 6px;
     }
-    .required { color: #ef4444; }
+    .required, .star { color: #ef4444; font-weight: bold; }
     .inputbox, .form-control {
       width: 100%;
       padding: 8px 12px;
@@ -141,7 +142,7 @@
       border-radius: 6px;
       padding: 12px;
       color: #38bdf8;
-      max-height: 520px;
+      max-height: 580px;
       overflow-y: auto;
       white-space: pre-wrap;
       margin-top: 12px;
@@ -324,7 +325,7 @@
       }
     }
 
-    // Dynamic injection of realistic Joomla/JomClassifieds vehicle custom fields
+    // Dynamic injection of realistic Joomla/JomClassifieds vehicle custom fields in the EXACT sequence
     function injectVehicleFields(variant = 'standard') {
       const container = document.getElementById('dice-vehicle-fields-container');
       if (!container) return;
@@ -335,12 +336,12 @@
         kmFieldHtml = `
           <div class="control-group">
             <div class="control-label">
-              <label id="jform_field_mileage-lbl" for="jform_field_mileage" class="hasPopover" title="Kilometers Driven" data-content="Enter the vehicle kilometers driven">
+              <label id="jform_field_mileage-lbl" for="jform_field_mileage" class="hasPopover" title="Kilometers Driven" data-content="Enter vehicle kilometers driven">
                 Kilometers Driven <span class="required">*</span>
               </label>
             </div>
             <div class="controls">
-              <input type="text" id="jform_field_mileage" name="fields[mileage]" class="form-control inputbox" placeholder="e.g. 78 000 km">
+              <input type="text" id="jform_field_mileage" name="fields[mileage]" class="form-control inputbox" placeholder="e.g. 100 km">
             </div>
           </div>
         `;
@@ -352,7 +353,7 @@
               <label for="odometer">Kilometers Driven <span class="required">*</span></label>
             </div>
             <div class="controls">
-              <input type="text" id="odometer" name="odometer" class="form-control inputbox" placeholder="e.g. 78 000 km">
+              <input type="text" id="odometer" name="odometer" class="form-control inputbox" placeholder="e.g. 100 km">
             </div>
           </div>
         `;
@@ -362,7 +363,7 @@
           <div class="control-group">
             <div class="control-label">Kilometers Driven <span class="required">*</span></div>
             <div class="controls">
-              <input type="text" id="jform_custom_83" name="fields[83]" class="form-control inputbox" placeholder="e.g. 78 000 km">
+              <input type="text" id="jform_custom_83" name="fields[83]" class="form-control inputbox" placeholder="e.g. 100 km">
             </div>
           </div>
         `;
@@ -374,7 +375,7 @@
               <label for="generated_field_99">Kilometers Driven <span class="required">*</span></label>
             </div>
             <div class="controls">
-              <input type="text" id="generated_field_99" name="fields[99]" class="form-control inputbox" placeholder="e.g. 78 000 km">
+              <input type="text" id="generated_field_99" name="fields[99]" class="form-control inputbox" placeholder="e.g. 100 km">
             </div>
           </div>
         `;
@@ -386,15 +387,17 @@
               <label for="km_input_e">Kilometers Driven <span class="required">*</span></label>
             </span>
             <div class="controls">
-              <input type="text" id="km_input_e" name="fields[km_e]" class="form-control inputbox" placeholder="e.g. 78 000 km">
+              <input type="text" id="km_input_e" name="fields[km_e]" class="form-control inputbox" placeholder="e.g. 100 km">
             </div>
           </div>
         `;
       }
 
       container.innerHTML = `
+        <div class="section-title">Vehicle Custom Fields</div>
+
         <div class="row-2col">
-          <!-- Seller Type -->
+          <!-- 1. Seller Type -->
           <div class="control-group">
             <div class="control-label">
               <label id="seller_type-lbl" for="seller_type" class="hasPopover" title="Seller Type" data-content="Dealer or Private">Seller Type</label>
@@ -408,29 +411,29 @@
             </div>
           </div>
 
-          <!-- Brand -->
+          <!-- 2. Date -->
           <div class="control-group">
             <div class="control-label">
-              <label id="brand-lbl" for="brand" class="hasPopover" title="Brand" data-content="Vehicle make / brand">Brand</label>
+              <label id="date-lbl" for="jform_field_date" class="hasPopover" title="Date" data-content="Listing date">Date</label>
             </div>
             <div class="controls">
-              <input type="text" id="brand" name="brand" class="form-control inputbox" placeholder="e.g. BMW">
+              <input type="text" id="jform_field_date" name="fields[date]" class="form-control inputbox" placeholder="YYYY-MM-DD">
             </div>
           </div>
         </div>
 
         <div class="row-2col">
-          <!-- Year -->
+          <!-- 3. Year (Realistic Joomla structure) -->
           <div class="control-group">
             <div class="control-label">
-              <label id="year-lbl" for="jform_field_year" class="hasPopover" title="Year" data-content="Year of manufacture">Year <span class="required">*</span></label>
+              <label id="jform_field_year-lbl" for="jform_field_year" class="hasPopover" title="Year" data-content="Enter vehicle manufacturing year">Year <span class="star">*</span></label>
             </div>
             <div class="controls">
-              <input type="text" id="jform_field_year" name="fields[year]" class="form-control inputbox" placeholder="e.g. 2021">
+              <input type="text" id="jform_field_year" name="fields[year]" class="form-control inputbox" placeholder="e.g. 2026">
             </div>
           </div>
 
-          <!-- Kilometers Driven (Target Field) -->
+          <!-- 4. Kilometers Driven (Target Field) -->
           ${kmFieldHtml}
         </div>
 
@@ -447,20 +450,20 @@
         </div>
 
         <div class="row-2col">
-          <!-- Transmission -->
+          <!-- 5. Transmission -->
           <div class="control-group">
             <div class="control-label">
-              <label id="transmission-lbl" for="jform_field_transmission" class="hasPopover" title="Transmission">Transmission</label>
+              <label id="transmission-lbl" for="jform_field_transmission" class="hasPopover" title="Transmission" data-content="Transmission type">Transmission</label>
             </div>
             <div class="controls">
               <input type="text" id="jform_field_transmission" name="fields[transmission]" class="form-control inputbox" placeholder="Automatic">
             </div>
           </div>
 
-          <!-- Fuel -->
+          <!-- 6. Fuel -->
           <div class="control-group">
             <div class="control-label">
-              <label id="fuel-lbl" for="jform_field_fuel" class="hasPopover" title="Fuel Type">Fuel</label>
+              <label id="fuel-lbl" for="jform_field_fuel" class="hasPopover" title="Fuel Type" data-content="Fuel type">Fuel</label>
             </div>
             <div class="controls">
               <input type="text" id="jform_field_fuel" name="fields[fuel]" class="form-control inputbox" placeholder="Petrol">
@@ -469,42 +472,42 @@
         </div>
 
         <div class="row-2col">
-          <!-- Drivetrain -->
+          <!-- 7. 4x2 / 4x4 (Drivetrain) -->
           <div class="control-group">
             <div class="control-label">
-              <label id="drivetrain-lbl" for="jform_field_drivetrain" class="hasPopover" title="Drivetrain">4x2 / 4x4 (Drivetrain)</label>
+              <label id="drivetrain-lbl" for="jform_field_drivetrain" class="hasPopover" title="Drivetrain" data-content="Drive type">4x2 / 4x4</label>
             </div>
             <div class="controls">
-              <input type="text" id="jform_field_drivetrain" name="fields[drivetrain]" class="form-control inputbox" placeholder="4x4">
+              <input type="text" id="jform_field_drivetrain" name="fields[drivetrain]" class="form-control inputbox" placeholder="4x2">
             </div>
           </div>
 
-          <!-- Body Colour -->
+          <!-- 8. Body Colour -->
           <div class="control-group">
             <div class="control-label">
-              <label id="body_colour-lbl" for="jform_field_body_colour" class="hasPopover" title="Body Colour">Body Colour</label>
+              <label id="body_colour-lbl" for="jform_field_body_colour" class="hasPopover" title="Body Colour" data-content="Vehicle exterior color">Body Colour</label>
             </div>
             <div class="controls">
-              <input type="text" id="jform_field_body_colour" name="fields[body_colour]" class="form-control inputbox" placeholder="White">
+              <input type="text" id="jform_field_body_colour" name="fields[body_colour]" class="form-control inputbox" placeholder="Black">
             </div>
           </div>
         </div>
 
         <div class="row-2col">
-          <!-- Condition -->
+          <!-- 9. Condition (Second condition input) -->
           <div class="control-group">
             <div class="control-label">
-              <label id="condition-lbl" for="jform_field_condition" class="hasPopover" title="Condition">Condition</label>
+              <label id="condition-lbl" for="jform_field_condition" class="hasPopover" title="Condition" data-content="Vehicle condition">Condition</label>
             </div>
             <div class="controls">
-              <input type="text" id="jform_field_condition" name="fields[condition]" class="form-control inputbox" placeholder="Used">
+              <input type="text" id="jform_field_condition" name="fields[condition]" class="form-control inputbox" placeholder="New">
             </div>
           </div>
 
-          <!-- Seats -->
+          <!-- 10. Seats -->
           <div class="control-group">
             <div class="control-label">
-              <label id="seats-lbl" for="jform_field_seats" class="hasPopover" title="Seats">Seats</label>
+              <label id="seats-lbl" for="jform_field_seats" class="hasPopover" title="Seats" data-content="Number of seats">Seats</label>
             </div>
             <div class="controls">
               <input type="text" id="jform_field_seats" name="fields[seats]" class="form-control inputbox" placeholder="5">
@@ -512,7 +515,95 @@
           </div>
         </div>
 
-        <!-- 6 & 7. Price and Currency Row -->
+        <!-- 11. Pricing Summary -->
+        <div class="control-group">
+          <div class="control-label">
+            <label id="pricing_summary-lbl" for="jform_field_pricing_summary" class="hasPopover" title="Pricing Summary" data-content="Pricing and finance summary">Pricing Summary</label>
+          </div>
+          <div class="controls">
+            <input type="text" id="jform_field_pricing_summary" name="fields[pricing_summary]" class="form-control inputbox" placeholder="R 509 900 / Est. R 9 092 p/m">
+          </div>
+        </div>
+
+        <div class="row-2col">
+          <!-- 12. Dealer Name -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="dealer_name-lbl" for="jform_field_dealer_name" class="hasPopover" title="Dealer Name" data-content="Dealership name">Dealer Name</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_dealer_name" name="fields[dealer_name]" class="form-control inputbox" placeholder="BAIC Umhlanga">
+            </div>
+          </div>
+
+          <!-- 13. Dealer Address -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="dealer_address-lbl" for="jform_field_dealer_address" class="hasPopover" title="Dealer Address" data-content="Dealership address">Dealer Address</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_dealer_address" name="fields[dealer_address]" class="form-control inputbox" placeholder="Durban, KwaZulu Natal">
+            </div>
+          </div>
+        </div>
+
+        <div class="row-2col">
+          <!-- 14. Dealer Average Rating -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="dealer_rating-lbl" for="jform_field_dealer_rating" class="hasPopover" title="Dealer Rating" data-content="Average rating">Dealer Average Rating</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_dealer_rating" name="fields[dealer_rating]" class="form-control inputbox" placeholder="4.6 (12 Reviews)">
+            </div>
+          </div>
+
+          <!-- 15. Contact Number -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="contact_number-lbl" for="jform_field_contact_number" class="hasPopover" title="Contact Number" data-content="Contact phone">Contact Number</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_contact_number" name="fields[contact_number]" class="form-control inputbox" placeholder="060 058 7777">
+            </div>
+          </div>
+        </div>
+
+        <!-- 16. Features -->
+        <div class="control-group">
+          <div class="control-label">
+            <label id="features-lbl" for="jform_field_features" class="hasPopover" title="Features" data-content="Vehicle features">Features</label>
+          </div>
+          <div class="controls">
+            <textarea id="jform_field_features" name="fields[features]" class="form-control inputbox" style="height: 60px;" placeholder="ABS Electric Windows Air bags LED ..."></textarea>
+          </div>
+        </div>
+
+        <div class="row-2col">
+          <!-- 17. Source Link -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="source_link-lbl" for="jform_field_source_link" class="hasPopover" title="Source Link" data-content="Source portal URL">Source Link</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_source_link" name="fields[source_link]" class="form-control inputbox" placeholder="https://www.cars.co.za/...">
+            </div>
+          </div>
+
+          <!-- 18. Vehicle Highlights -->
+          <div class="control-group">
+            <div class="control-label">
+              <label id="highlights-lbl" for="jform_field_highlights" class="hasPopover" title="Vehicle Highlights" data-content="Vehicle highlights">Vehicle Highlights</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="jform_field_highlights" name="fields[highlights]" class="form-control inputbox" placeholder="1.5L Turbo Petrol, 130 kW, 305 Nm, 7-speed DCT">
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Pricing & Classification</div>
+
+        <!-- 19 & 20. Price and Currency Row -->
         <div class="row-2col">
           <div class="control-group">
             <div class="control-label">
@@ -540,7 +631,7 @@
           </div>
         </div>
 
-        <!-- 8. Tag -->
+        <!-- 21. Tag -->
         <div class="control-group">
           <div class="control-label">
             <label for="target_tags">Tag</label>
@@ -554,7 +645,7 @@
           </div>
         </div>
 
-        <!-- 9. Description (with Realistic Toggle Editor) -->
+        <!-- 22. Description (with Realistic Toggle Editor) -->
         <div class="control-group">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label class="control-label" style="margin-bottom: 0;">Description</label>
@@ -565,29 +656,42 @@
           </div>
         </div>
 
-        <!-- 11. Address -->
-        <div class="control-group">
-          <div class="control-label">
-            <label for="address">Address</label>
+        <div class="section-title">Images & Video</div>
+        <div class="control-group" style="padding: 12px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; text-align: center; color: #64748b; font-size: 12px;">
+          Image and video upload area (manual submission)
+        </div>
+
+        <div class="section-title">Contact Details</div>
+
+        <!-- 24 & 25. Address and Location -->
+        <div class="row-2col">
+          <div class="control-group">
+            <div class="control-label">
+              <label for="address">Address</label>
+            </div>
+            <div class="controls">
+              <input type="text" id="address" name="address" class="form-control inputbox" placeholder="Dealership address">
+            </div>
           </div>
-          <div class="controls">
-            <input type="text" id="address" name="address" class="form-control inputbox" placeholder="Dealership address">
+
+          <div class="control-group">
+            <div class="control-label">
+              <label for="target_country">Location</label>
+            </div>
+            <div class="controls">
+              <select id="target_country" name="location" class="form-control inputbox">
+                <option value="">- Select a country -</option>
+                <option value="ZA">South Africa</option>
+                <option value="US">United States</option>
+                <option value="UK">United Kingdom</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <!-- 12. Location -->
-        <div class="control-group">
-          <div class="control-label">
-            <label for="target_country">Location</label>
-          </div>
-          <div class="controls">
-            <select id="target_country" name="location" class="form-control inputbox">
-              <option value="">- Select a country -</option>
-              <option value="ZA">South Africa</option>
-              <option value="US">United States</option>
-              <option value="UK">United Kingdom</option>
-            </select>
-          </div>
+        <div class="section-title">Promote Section</div>
+        <div class="control-group" style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; color: #475569;">
+          <label><input type="checkbox" id="promote_ad" name="promote_ad"> Promote this advert (optional)</label>
         </div>
       `;
 
@@ -721,22 +825,31 @@
       }, 120);
     }
 
-    // Exact live failure payload: 2021 BMW X3
-    const bmwPayload = {
-      title: "2021 BMW X3",
-      price: "549950",
-      year: "2021",
-      kilometersDriven: "78 000 km",
+    // Comprehensive realistic payload: 2026 BAIC X55
+    const baicPayload = {
+      title: "2026 BAIC X55",
+      year: "2026",
+      kilometersDriven: "100 km",
       transmission: "Automatic",
       fuel: "Petrol",
-      drivetrain: "4x4",
-      bodyColour: "White",
-      condition: "Used",
+      drivetrain: "4x2",
+      bodyColor: "Black",
+      condition: "New",
       seats: "5",
-      dealerName: "Cape Town BMW",
-      dealerAddress: "Cape Town, Western Cape",
-      contactNumber: "060 123 4567",
-      description: "Pristine condition 2021 BMW X3 xDrive20d M Sport with panoramic sunroof, leather interior, and full service history."
+      pricingSummary: "R 509 900 / Est. R 9 092 p/m",
+      dealerName: "BAIC Umhlanga",
+      dealerAddress: "Durban, KwaZulu Natal",
+      dealerAverageRating: "4.6 (12 Reviews)",
+      features: "ABS Electric Windows Air bags LED ...",
+      contactNumber: "060 058 7777",
+      sourceUrl: "https://www.cars.co.za/for-sale/used/2026-BAIC-Beijing-X55-1.5T-Premium-KwaZulu-Natal-Durban/10984852/",
+      vehicleHighlights: "1.5L Turbo Petrol, 130 kW, 305 Nm, 7-speed DCT",
+      price: "509900",
+      currency: "ZAR",
+      tags: "Sale",
+      description: "Pristine 2026 BAIC X55 with full premium spec, panoramic sunroof, intelligent cockpit, and full warranty.",
+      address: "Durban, KwaZulu Natal",
+      location: "South Africa"
     };
 
     async function runAutomatorTest() {
@@ -755,7 +868,7 @@
       window.__fixtureLogCallback = log;
 
       try {
-        log('Target Payload: ' + JSON.stringify(bmwPayload, null, 2));
+        log('Target Payload: ' + JSON.stringify(baicPayload, null, 2));
 
         // ================================================================
         // NEGATIVE ASSERTIONS (INITIAL CLEAN STATE BEFORE AUTOMATION)
@@ -763,9 +876,12 @@
         log('\n--- VERIFYING INITIAL CLEAN STATE & NEGATIVE ASSERTIONS ---');
         log(`[0ms] Category available in DOM: id="parent_id_0"`);
         
-        const assert = (cond, label) => {
+        const assert = (cond, label, failDetails = null) => {
           if (!cond) {
             log(`[FAIL] ${label}`);
+            if (failDetails) {
+              log(`\nFIELD FAILURE DIAGNOSTIC:\n${failDetails}`);
+            }
             throw new Error(`Assertion failed: ${label}`);
           }
           log(`[PASS] ${label}`);
@@ -773,14 +889,15 @@
 
         assert(document.getElementById('parent_id_1') === null, 'Negative Test: Sub Category (parent_id_1) does NOT exist in initial DOM');
         assert(document.getElementById('parent_id_2') === null, 'Negative Test: Third Level (parent_id_2) does NOT exist in initial DOM');
-        assert(document.getElementById('jform_field_mileage') === null && document.getElementById('kilometers_driven') === null, 'Negative Test: Kilometers Driven field does NOT exist in initial DOM');
+        assert(document.getElementById('jform_field_year') === null, 'Negative Test: Year field does NOT exist in initial DOM');
+        assert(document.getElementById('jform_field_mileage') === null, 'Negative Test: Kilometers Driven field does NOT exist in initial DOM');
         assert(document.getElementById('price') === null, 'Negative Test: Price field does NOT exist in initial DOM');
 
         // ================================================================
         // RUN AUTOMATION FROM CLEAN INITIAL STATE
         // ================================================================
         log('\n--- RUNNING DICEAUTOMATOR FROM CLEAN INITIAL STATE ---');
-        const result = await window.DiceAutomator.fillForm(document, { fields: bmwPayload }, {
+        const result = await window.DiceAutomator.fillForm(document, { fields: baicPayload }, {
           stepDelayMs: 40,
           maxWaitMs: 4000,
           pollIntervalMs: 40,
@@ -812,53 +929,67 @@
         assert(getChosenText('parent_id_2').includes('Used cars in South Africa'), 'Visible Third Level = Used cars in South Africa');
         assert(document.getElementById('dice-vehicle-fields-container').style.display === 'block', 'Vehicle fields revealed dynamically');
 
-        // 2. Identify resolved Kilometers & Decoy elements for diagnostic print
+        // 2. Identify resolved Year, Kilometers & Price elements
+        const yearEl = document.getElementById('jform_field_year');
         const kmEl = document.querySelector('input[name="fields[mileage]"], #jform_field_mileage, #odometer, #jform_custom_83, #generated_field_99, #km_input_e');
         const priceEl = document.getElementById('price');
         const decoyEl = document.getElementById('dealer_notes_mileage_ref');
 
-        // TIMING & DOM CREATION LOGS (STEP REQUIREMENT)
+        // TIMING & DOM CREATION LOGS
         log('\n=== LIFECYCLE & DOM CREATION LOGS ===');
+        log(`[after vehicle fields] Year field found: id="${yearEl?.id || 'none'}", name="${yearEl?.name || 'none'}"`);
         log(`[after vehicle fields] Kilometers field found: id="${kmEl?.id || 'none'}", name="${kmEl?.name || 'none'}"`);
-        log(`[after vehicle fields] Price field found: id="${priceEl?.id || 'none'}", name="${priceEl?.name || 'none'}"`);
+        log(`[after vehicle fields] Price field found: id="${priceEl?.id || 'none'}"`);
 
         // DIAGNOSTIC OUTPUT
-        log('\n=== KILOMETERS FIELD REALISTIC DOM DIAGNOSTIC ===');
-        log(`Kilometers target:
-element: <${(kmEl?.tagName || '').toLowerCase()}>
-id: ${kmEl?.id || '(none)'}
-name: ${kmEl?.name || '(none)'}
-type: ${kmEl?.type || '(none)'}
-label: "${kmEl?.closest('.control-group')?.querySelector('.control-label')?.textContent?.trim() || ''}"
-wrapper: ${kmEl?.closest('.control-group')?.className || ''}
-value: "${kmEl?.value || ''}"
+        log('\n=== FIELD AUDIT DIAGNOSTIC ===');
+        const auditField = (name, el, expected) => {
+          const val = el ? (el.value || '') : '';
+          const found = !!el;
+          const pass = found && (val.trim() === expected.trim() || val.includes(expected));
+          const diagnosticStr = `FIELD: ${name}
+EXPECTED: ${expected}
+ELEMENT FOUND: ${found ? 'YES' : 'NO'}
+ID: ${el?.id || 'none'}
+NAME: ${el?.name || 'none'}
+TYPE: ${el?.type || el?.tagName || 'none'}
+LABEL: ${el?.closest('.control-group')?.querySelector('.control-label')?.textContent?.trim() || ''}
+VALUE: ${val}
+VISIBLE: ${el && el.offsetParent !== null ? 'YES' : 'NO'}
+DISABLED: ${el?.disabled ? 'YES' : 'NO'}
+READONLY: ${el?.readOnly ? 'YES' : 'NO'}
+PARENT: ${el?.parentElement?.className || ''}
+OUTER HTML: ${el ? el.outerHTML : 'none'}`;
+          
+          assert(pass, `Field [${name}] populated with expected "${expected}" (actual: "${val}")`, diagnosticStr);
+        };
 
-Price target:
-element: <${(priceEl?.tagName || '').toLowerCase()}>
-id: ${priceEl?.id || '(none)'}
-name: ${priceEl?.name || '(none)'}
-value: "${priceEl?.value || ''}"
-
-Decoy:
-element: <${(decoyEl?.tagName || '').toLowerCase()}>
-id: ${decoyEl?.id || '(none)'}
-name: ${decoyEl?.name || '(none)'}
-value: "${decoyEl?.value || ''}"`);
-
-        // 3. Core Field Assertions
-        assert(document.getElementById('title').value === '2021 BMW X3', 'Title populated');
-        assert(document.getElementById('jform_field_year')?.value === '2021', 'Year populated');
-        assert(kmEl && kmEl.value === '78 000 km', 'Kilometers Driven populated = 78 000 km');
-        assert(priceEl && priceEl.value === '549950', 'Price populated = 549950');
+        auditField('Title', document.getElementById('title'), '2026 BAIC X55');
+        auditField('Year', yearEl, '2026');
+        auditField('Kilometers Driven', kmEl, '100 km');
+        auditField('Transmission', document.getElementById('jform_field_transmission'), 'Automatic');
+        auditField('Fuel', document.getElementById('jform_field_fuel'), 'Petrol');
+        auditField('Drivetrain', document.getElementById('jform_field_drivetrain'), '4x2');
+        auditField('Body Colour', document.getElementById('jform_field_body_colour'), 'Black');
+        auditField('Condition', document.getElementById('jform_field_condition'), 'New');
+        auditField('Seats', document.getElementById('jform_field_seats'), '5');
+        auditField('Pricing Summary', document.getElementById('jform_field_pricing_summary'), 'R 509 900 / Est. R 9 092 p/m');
+        auditField('Dealer Name', document.getElementById('jform_field_dealer_name'), 'BAIC Umhlanga');
+        auditField('Dealer Address', document.getElementById('jform_field_dealer_address'), 'Durban, KwaZulu Natal');
+        auditField('Dealer Rating', document.getElementById('jform_field_dealer_rating'), '4.6 (12 Reviews)');
+        auditField('Contact Number', document.getElementById('jform_field_contact_number'), '060 058 7777');
+        auditField('Features', document.getElementById('jform_field_features'), 'ABS Electric Windows Air bags LED ...');
+        auditField('Price', priceEl, '509900');
         assert(document.getElementById('target_currency')?.value === 'ZAR', 'Currency = ZAR');
         assert(getChosenText('target_currency').includes('Rand') || getChosenText('target_currency') === 'ZAR', 'Visible Currency = R (Rand)');
         assert(document.getElementById('target_tags')?.value === 'sale', 'Tag = Sale');
         assert(document.getElementById('target_country')?.value === 'ZA', 'Location = South Africa');
+        assert(document.getElementById('address')?.value.includes('Durban'), 'Address = Durban, KwaZulu Natal');
 
-        // 4. Decoy Mileage field assertion (MUST NOT be filled with car kilometers)
-        assert(decoyEl && decoyEl.value === '', 'Decoy mileage reference field remains unchanged/empty');
+        // Decoy Mileage field assertion (MUST NOT be filled with car kilometers)
+        assert(decoyEl && decoyEl.value === '', 'Decoy mileage reference field remains untouched/empty');
 
-        // 5. Description Toggle Editor
+        // Description Toggle Editor
         assert(window.__toggleEditorClicked === true, 'Toggle Editor activated');
         const liveIfr = document.getElementById('description_ifr');
         const ifrDoc = liveIfr ? (liveIfr.contentDocument || liveIfr.contentWindow?.document) : null;
@@ -867,16 +998,15 @@ value: "${decoyEl?.value || ''}"`);
         const descTextarea = document.getElementById('target_description');
         assert(descTextarea && descTextarea.value.length > 20, 'Description textarea synchronized');
 
-        // 6. Safety
+        // Safety
         assert(window.__formSubmitted === false, 'Post Ad NEVER clicked');
 
-        // 7. Execute Variants Test (Cases A - E)
+        // Execute Variants Test (Cases A - E)
         log('\n=== TESTING KILOMETERS DOM STRUCTURE VARIANTS (CASES A - E) ===');
         const variants = ['caseA', 'caseB', 'caseC', 'caseD', 'caseE'];
         for (const variant of variants) {
           injectVehicleFields(variant);
-          // Re-populate target form via Smart Engine
-          window.CarSmartPasteEngine.fillTargetForm(document, bmwPayload);
+          window.CarSmartPasteEngine.fillTargetForm(document, baicPayload);
           let targetKmInp = null;
           if (variant === 'caseA') targetKmInp = document.getElementById('jform_field_mileage');
           else if (variant === 'caseB') targetKmInp = document.getElementById('odometer');
@@ -885,7 +1015,7 @@ value: "${decoyEl?.value || ''}"`);
           else if (variant === 'caseE') targetKmInp = document.getElementById('km_input_e');
 
           log(`  Variant [${variant}]: targetKmInp value="${targetKmInp?.value || ''}", decoy value="${document.getElementById('dealer_notes_mileage_ref')?.value || ''}"`);
-          assert(targetKmInp && targetKmInp.value === '78 000 km', `Variant [${variant}]: Kilometers field correctly discovered & populated`);
+          assert(targetKmInp && targetKmInp.value === '100 km', `Variant [${variant}]: Kilometers field correctly discovered & populated`);
           assert(document.getElementById('dealer_notes_mileage_ref').value === '', `Variant [${variant}]: Decoy field untouched`);
         }
 
