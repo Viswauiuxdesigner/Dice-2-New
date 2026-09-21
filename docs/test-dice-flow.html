@@ -936,7 +936,13 @@
           const prodWidget = document.getElementById('dice-floating-automation-bar');
           assert(prodWidget !== null, 'TEST AL: Production Automator panel rendered');
 
-          // TEST AN: Production UI has NO diagnostic buttons
+          // TEST AR: Production UI contains clearly visible FILL FORM button
+          const fillBtn = prodWidget.querySelector('#dice-bar-run-autofill');
+          assert(fillBtn !== null, 'TEST AR: Production UI contains [⚡ FILL FORM] button');
+          assert(fillBtn.textContent.includes('FILL FORM'), 'TEST AR: Fill button has text "FILL FORM"');
+          assert(fillBtn.disabled === false, 'TEST AR: Fill button is enabled when vehicle data is present');
+
+          // TEST AN: Production UI has NO diagnostic/debug buttons
           assert(prodWidget.querySelector('#dice-bar-run-inspect') === null, 'TEST AN: Production UI has NO "Inspect Category DOM" button');
           assert(prodWidget.querySelector('#dice-bar-run-inspect-fields') === null, 'TEST AN: Production UI has NO "Inspect Vehicle Fields" button');
           assert(prodWidget.querySelector('#dice-bar-run-dryrun') === null, 'TEST AN: Production UI has NO "Dry-Run" button');
@@ -952,13 +958,16 @@
           closeBtn.click();
           assert(document.getElementById('dice-floating-automation-bar') === null, 'TEST AM: Automator panel removed on close');
 
-          // Reopen
+          // Reopen without vehicle data -> disabled button
           window.DiceTabListener.renderPendingWidget({
-            jobId: 'prod-ui-test-reopen',
-            fields: { title: '2026 BAIC X55', price: '509900' }
+            jobId: 'prod-ui-test-empty',
+            fields: {}
           });
-          assert(document.getElementById('dice-floating-automation-bar') !== null, 'TEST AM: Automator panel reopens cleanly');
-          document.getElementById('dice-floating-automation-bar')?.remove();
+          const emptyWidget = document.getElementById('dice-floating-automation-bar');
+          assert(emptyWidget !== null, 'TEST AM: Automator panel reopens cleanly');
+          const emptyFillBtn = emptyWidget.querySelector('#dice-bar-run-autofill');
+          assert(emptyFillBtn && emptyFillBtn.disabled === true, 'TEST AR: Fill button is disabled when vehicle data is missing');
+          emptyWidget.remove();
         }
 
         // TEST AO: Success shows simple toast

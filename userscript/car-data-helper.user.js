@@ -4604,7 +4604,8 @@ verification result: FAIL`);
 
       const title = job.fields?.title || 'Vehicle Listing';
       const price = job.fields?.price ? `R ${job.fields.price}` : '';
-      const isDebugMode = !!(options.debugMode || job.debugMode);
+      const hasVehicleData = !!(job && job.fields && (job.fields.title || job.fields.year || job.fields.price));
+      const isDebugMode = !!(options.debugMode || job.debugMode || (typeof window !== 'undefined' && window.__DICE_DEBUG__));
 
       const widget = document.createElement('div');
       widget.id = 'dice-floating-automation-bar';
@@ -4647,13 +4648,10 @@ verification result: FAIL`);
       if (isDebugMode) {
         debugHtml = `
           <div id="dice-bar-log" style="margin-top: 8px; max-height: 180px; overflow-y: auto; font-family: monospace; font-size: 10px; color: #94a3b8; background: #020617; padding: 6px; border-radius: 4px; display: none; white-space: pre-wrap; user-select: text;"></div>
-          <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
-            <div style="display: flex; gap: 4px;">
-              <button id="dice-bar-run-autofill" style="background: #16a34a; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer; flex: 2;">⚡ Run Auto-Fill</button>
-              <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 5px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer; flex: 1;">🧪 Dry-Run</button>
-            </div>
-            <button id="dice-bar-run-inspect-fields" style="background: #0d9488; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer;">🔎 Inspect Vehicle Fields</button>
-            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 5px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; cursor: pointer;">🔎 Inspect Category DOM</button>
+          <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">
+            <button id="dice-bar-run-dryrun" style="background: #0284c7; color: #ffffff; border: none; padding: 4px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer;">🧪 Dry-Run</button>
+            <button id="dice-bar-run-inspect-fields" style="background: #0d9488; color: #ffffff; border: none; padding: 4px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; cursor: pointer;">🔎 Inspect Vehicle Fields</button>
+            <button id="dice-bar-run-inspect" style="background: #6366f1; color: #ffffff; border: none; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; cursor: pointer;">🔎 Inspect Category DOM</button>
           </div>
         `;
       }
@@ -4666,9 +4664,16 @@ verification result: FAIL`);
           <button id="dice-bar-close" aria-label="Close" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 4px; line-height: 1;">✕</button>
         </div>
         <div style="padding: 10px 12px;">
-          <div id="dice-bar-status-text" style="color: #4ade80; font-weight: 700; font-size: 11px; margin-bottom: 4px;">Vehicle data ready ✓</div>
+          <div id="dice-bar-status-text" style="color: ${hasVehicleData ? '#4ade80' : '#facc15'}; font-weight: 700; font-size: 11px; margin-bottom: 4px;">
+            ${hasVehicleData ? 'Vehicle data ready ✓' : 'No vehicle data'}
+          </div>
           <div style="font-weight: 600; color: #f8fafc; font-size: 12px; word-break: break-word;">${title}</div>
           ${price ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">Price: ${price}</div>` : ''}
+          <div style="margin-top: 8px;">
+            <button id="dice-bar-run-autofill" style="width: 100%; background: #16a34a; color: #ffffff; border: none; padding: 7px 12px; border-radius: 6px; font-weight: 700; font-size: 11.5px; cursor: ${hasVehicleData ? 'pointer' : 'not-allowed'}; opacity: ${hasVehicleData ? '1' : '0.5'}; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: all 0.15s ease;" ${!hasVehicleData ? 'disabled' : ''}>
+              <span>⚡</span> FILL FORM
+            </button>
+          </div>
           ${debugHtml}
         </div>
       `;
@@ -4738,22 +4743,53 @@ verification result: FAIL`);
         document.addEventListener('touchend', onPointerUp);
       }
 
+      // Action: Fill Form
+      const runBtn = widget.querySelector('#dice-bar-run-autofill');
+      if (runBtn) {
+        runBtn.onclick = async () => {
+          if (!hasVehicleData || runBtn.disabled) return;
+          const statusTextEl = widget.querySelector('#dice-bar-status-text');
+          const origText = statusTextEl ? statusTextEl.textContent : '';
+          const origColor = statusTextEl ? statusTextEl.style.color : '';
+
+          try {
+            runBtn.disabled = true;
+            runBtn.innerHTML = '<span>⏳</span> Filling form...';
+            runBtn.style.opacity = '0.75';
+            runBtn.style.cursor = 'wait';
+            if (statusTextEl) {
+              statusTextEl.textContent = 'Filling form...';
+              statusTextEl.style.color = '#38bdf8';
+            }
+
+            this.logToWidget('Starting auto-fill sequence...');
+            const res = await DiceAutomator.fillForm(document, job, {
+              logCallback: (m) => this.logToWidget(m)
+            });
+            this.updateWidgetStatus(res);
+          } catch (error) {
+            if (statusTextEl) {
+              statusTextEl.textContent = 'Auto-fill error ✕';
+              statusTextEl.style.color = '#f87171';
+            }
+            DiceAutomator.renderErrorBanner(document, error.message);
+            this.logToWidget(`❌ Runtime error: ${error.message}`);
+            console.error('[DICE AUTO-FILL]', error);
+          } finally {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<span>⚡</span> FILL FORM';
+            runBtn.style.opacity = '1';
+            runBtn.style.cursor = 'pointer';
+            if (statusTextEl && statusTextEl.textContent === 'Filling form...') {
+              statusTextEl.textContent = origText;
+              statusTextEl.style.color = origColor;
+            }
+          }
+        };
+      }
+
       // Debug actions if rendered
       if (isDebugMode) {
-        const runBtn = widget.querySelector('#dice-bar-run-autofill');
-        if (runBtn) {
-          runBtn.onclick = async () => {
-            try {
-              this.logToWidget('Starting auto-fill sequence...');
-              const res = await DiceAutomator.fillForm(document, job, {
-                logCallback: (m) => this.logToWidget(m)
-              });
-              this.updateWidgetStatus(res);
-            } catch (error) {
-              this.logToWidget(`❌ Runtime error: ${error.message}`);
-            }
-          };
-        }
         const dryBtn = widget.querySelector('#dice-bar-run-dryrun');
         if (dryBtn) {
           dryBtn.onclick = async () => {
